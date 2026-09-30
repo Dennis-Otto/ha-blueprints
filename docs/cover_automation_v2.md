@@ -29,6 +29,8 @@ darüber hinaus ist per Schalter zuschaltbar.
      (ein Datum+Zeit-Helfer feuert nur ein einziges Mal!). Einer für alle Instanzen.
    - Nachtmodus: ein `input_boolean`, z. B. "Nacht-Modus". Einer für alle Instanzen;
      wie er geschaltet wird (Zeitplan, Guten-Nacht-Szene, von Hand), bleibt dir überlassen.
+     Alternativ pro Fenster eine eigene Nacht-Uhrzeit über einen `input_datetime`-Helfer
+     (nur Uhrzeit) — immer nur eines von beiden.
    - Sonnenschutz: ein `input_boolean` **pro Fenster** als Status-Speicher,
      Namensvorschlag: "Beschattung <Fenstername>".
    - Sonnenheizen: ein **weiterer** `input_boolean` pro Fenster (nicht denselben wie
@@ -46,7 +48,7 @@ Fenster, bis der Helfer gesetzt oder das Feature deaktiviert ist.
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
 | Morgens öffnen      | Fährt zur eingestellten Uhrzeit auf die Zielposition (nur wenn geschlossener)                                                    | `input_datetime`-Helfer (nur Uhrzeit)      |
 | Fenster-Interaktion | Kippen → Lüftungsposition, Öffnen → ganz auf (optional: wie Kippen behandeln); nach dem Schließen zurück in die Ausgangsposition | — (immer aktiv)                            |
-| Nachtmodus          | Schließt beim Einschalten des Helfers; offene/gekippte Fenster bekommen eine Lüftungsposition                                    | `input_boolean`-Helfer                     |
+| Nachtmodus          | Schließt beim Einschalten des Helfers oder zur eigenen Uhrzeit; offene/gekippte Fenster bekommen eine Lüftungsposition           | `input_boolean` oder Uhrzeit-Helfer        |
 | Sturmschutz         | Fährt bei Starkwind hoch (oder im Panzer-Modus herunter)                                                                         | Wetter-Entität oder Wind-Sensor            |
 | Sonnenschutz        | Beschattet anhand des Sonnenstands so, dass die Sonne höchstens X m in den Raum fällt; öffnet nach Ende wieder                   | Status-Helfer, Geometrie, Temperaturquelle |
 | Sonnenheizen        | Öffnet im Winter vergessene Rollos, wenn Sonne ins Fenster scheint und es kalt ist                                               | eigener Status-Helfer, Geometrie           |
@@ -110,6 +112,23 @@ wieder beschattet werden.
 Wer die Beschattung dauerhaft nicht will, deaktiviert den Schalter "Sonnenschutz
 aktivieren" in der Instanz — der Status-Helfer ist **kein** Ausschalter, er ist das
 interne Gedächtnis der Automation und stellt sich bei Handbetätigung einfach zurück.
+
+### Nachtmodus per Helfer oder per Uhrzeit
+
+Der Nachtmodus lässt sich pro Fenster auf zwei Arten auslösen — **immer nur eine davon**:
+
+- **Helfer** (`input_boolean`): der gemeinsame Schalter für alle Fenster. Die Nacht
+  dauert, solange er eingeschaltet ist.
+- **Uhrzeit** (`input_datetime`, nur Uhrzeit): Dieses eine Fenster schließt zu einer
+  eigenen Zeit, z. B. das Kinderzimmer früher als der Rest. Die Nacht gilt dann ab
+  dieser Uhrzeit bis zur Uhrzeit für morgendliches Hochfahren (sofern dort ein Helfer
+  gewählt ist — auch wenn das Öffnen selbst deaktiviert ist), sonst bis Sonnenaufgang.
+
+In beiden Fällen verhält sich die Nacht gleich: keine Beschattung, kein Sonnenheizen,
+und ein geöffnetes Fenster bekommt nur die Lüftungsposition. Blueprints können "nur
+eines von beiden" im Formular nicht erzwingen. Sind beide Felder gesetzt, gilt der
+Helfer, die Uhrzeit wird ignoriert, und eine dauerhafte Benachrichtigung in Home
+Assistant benennt das betroffene Fenster.
 
 ### Warum die Status-Helfer nötig sind
 
