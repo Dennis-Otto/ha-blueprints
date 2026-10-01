@@ -111,6 +111,41 @@ Wer die Beschattung dauerhaft nicht will, deaktiviert den Schalter "Sonnenschutz
 aktivieren" in der Instanz — der Status-Helfer ist **kein** Ausschalter, er ist das
 interne Gedächtnis der Automation und stellt sich bei Handbetätigung einfach zurück.
 
+### Ein- und Ausschaltverzögerung (Quellwolken)
+
+An Tagen mit Quellwolken wechseln Sonne und Schatten im Minutentakt. Ohne Verzögerung
+entscheidet die Automation bei jedem 5-Minuten-Takt neu — springen Temperatur oder
+Wetterlage dabei hin und her, fährt der Rollladen ständig auf und zu. Dagegen helfen
+zwei Einstellungen im Sonnenschutz-Abschnitt:
+
+- **Einschaltverzögerung:** Die Beschattung startet erst, wenn alle Start-Bedingungen
+  (Sonne im Fenster, Temperatur über der Schwelle, erlaubte Wetterlage, kein
+  Nachtmodus, kein Sturm, keine Pause, Fenster nicht offen) so viele Minuten
+  **ununterbrochen** erfüllt sind. Jede Unterbrechung startet die Wartezeit neu.
+- **Ausschaltverzögerung:** Die Beschattung endet erst, wenn ein Ende-Grund (Sonne
+  nicht mehr im Fenster, Temperatur unter Schwelle minus Hysterese, nicht erlaubte
+  Wetterlage) so viele Minuten ununterbrochen besteht. Bis dahin bleibt der Rollladen
+  stehen.
+
+Bewährt hat sich ein asymmetrisches Paar wie **5 Minuten Ein, 20 Minuten Aus**:
+schnell schützen, zögerlich wieder öffnen. 0 (Standard) heißt keine Verzögerung —
+die Entscheidung fällt wie bisher beim nächsten 5-Minuten-Takt.
+
+Gut zu wissen:
+
+- Die Einschaltverzögerung gilt für **jeden** Start — auch nach Lüften, Sturm,
+  Morgens-Öffnen oder Pause setzt die Beschattung erst nach der Wartezeit wieder ein.
+- Die Ausschaltverzögerung gilt für das reguläre Ende (Sonne, Temperatur,
+  Wetterlage) — auch wenn die Sonne abends planmäßig das Sichtfeld verlässt; der
+  Rollladen öffnet dann entsprechend später. Nachtmodus, Sturm, Lüften,
+  Morgens-Öffnen und das Ende einer Pause greifen dagegen wie bisher sofort.
+- Das Nachführen einer laufenden Beschattung bleibt beim 5-Minuten-Takt.
+- Ist die Temperaturquelle kurz nicht verfügbar, zählt das weder als Start- noch als
+  Ende-Grund; eine laufende Wartezeit beginnt danach von vorn.
+- Mit gesetzter Ausschaltverzögerung ersetzt diese die feste 10-Minuten-Trägheit des
+  Wetterlagen-Filters.
+- Nach einem Neustart beginnen die Wartezeiten von vorn (siehe Bekannte Grenzen).
+
 ### Warum die Status-Helfer nötig sind
 
 Blueprints haben keinen eigenen Speicher, und bei Funk-Rollläden lässt sich aus den
@@ -128,6 +163,15 @@ die Einmal-Logik des Sonnenheizens und die Eingriffs-Erkennung auf.
 - **Wetterlagen-Filter:** Flattert das Wetter zwischen zwei _nicht_ erlaubten Lagen
   (z. B. Regen ↔ Starkregen), beendet erst Sonnenstand oder Temperatur die
   Beschattung. Der Filter beendet nur bei mindestens 10 Minuten stabil schlechter Lage.
+  Mit Ausschaltverzögerung entfällt diese Einschränkung: Dann beendet jede nicht
+  erlaubte Lage, die für die eingestellte Zeit ununterbrochen anliegt — auch im
+  Wechsel zwischen zwei nicht erlaubten Lagen.
+- **Verzögerungen nach einem Neustart:** Startet Home Assistant neu (oder wird die
+  Automation neu geladen bzw. wieder eingeschaltet), beginnen laufende Ein- und
+  Ausschaltverzögerungen von vorn. Sind die Bedingungen dabei schon erfüllt,
+  entscheidet stattdessen der 5-Minuten-Takt in den ersten zehn Minuten nach Ablauf
+  der Verzögerung (gezählt ab dem Neustart) anhand des Zustands in diesem Moment —
+  eine kurze Unterbrechung in der Zwischenzeit fällt dann nicht auf.
 - **Cover ohne Positions-Angabe** (nur auf/zu): Morgens-Öffnen funktioniert,
   Kipp-Position und Beschattung werden übersprungen — sie brauchen Positionsdaten.
 - **Windgeschwindigkeit** wird roh mit dem Grenzwert verglichen — liefert deine Quelle
@@ -148,7 +192,8 @@ Glas-Kalibrierung (siehe oben) ausgleichen; alle anderen Positions-Eingaben
 Benachrichtigung wegen fehlendem Status-Helfer? Ist eine Temperaturquelle gesetzt
 (eigener Sensor oder Wetter-Entität im Sturmschutz-Abschnitt)? Liegt die
 Außentemperatur über der Schwelle, steht die Sonne im Sichtfeld (Ausrichtung
-korrekt?), und ist das Fenster nicht komplett offen?
+korrekt?), und ist das Fenster nicht komplett offen? Mit Einschaltverzögerung muss
+das alles zusätzlich so lange ununterbrochen zutreffen.
 
 **Warum fährt der Rollladen nach dem Lüften zurück?** Beim Öffnen des Fensters merkt
 sich die Automation die Ausgangsposition und stellt sie nach dem Schließen wieder her
