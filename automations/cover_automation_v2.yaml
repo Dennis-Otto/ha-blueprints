@@ -549,6 +549,34 @@ blueprint:
               step: 5
               mode: slider
               unit_of_measurement: Minuten
+        min_move_interval:
+          name: Mindestabstand zwischen Nachführ-Fahrten
+          description: >
+            Schont den Motor: Das Nachführen einer laufenden Beschattung und das
+            Öffnen durch Sonnenheizen warten, bis der Rollladen mindestens so
+            lange stillsteht — egal, ob ihn zuletzt die Automatik, der
+            Wandtaster oder die App bewegt hat. Eine übersprungene Fahrt holt
+            die nächste Prüfung (alle 5 Minuten) nach Ablauf des Abstands nach.
+            Nicht verzögert werden Sturmschutz, Nachtmodus, Morgens öffnen,
+            Fenster-Interaktion und der "Rollladen schließen"-Knopf (Schutz bzw.
+            direkte Reaktion auf ein Ereignis) sowie Beginn und Ende einer
+            Beschattung: Sie schalten den Status-Helfer um und dürfen nicht
+            verschluckt werden, sonst bliebe der Raum ohne Schatten bzw. der
+            Rollladen nach dem Ende unten.
+            ⚠️ Während des Abstands wandert die Sonne weiter — bei Ost- und
+            Westfenstern morgens bzw. abends um bis zu ca. 25 % in 10 Minuten.
+            Ist der nachgeholte Schritt größer als die "Toleranz für manuelle
+            Eingriffe", gilt er als manueller Eingriff und das Nachführen ruht
+            bis zum Beschattungs-Ende — die Toleranz dann entsprechend erhöhen.
+            0 = kein Mindestabstand (bisheriges Verhalten).
+          default: 0
+          selector:
+            number:
+              min: 0
+              max: 60
+              step: 5
+              mode: slider
+              unit_of_measurement: Minuten
         force_shading:
           name: Beschattung erzwingen
           description: >
@@ -569,6 +597,8 @@ blueprint:
         der Sonnenschutz (Abschnitt "Fenstergeometrie & Sonnenausrichtung"), läuft
         aber unabhängig davon, ob der Sonnenschutz selbst aktiviert ist.
         Der Sturmschutz hat immer Vorrang — bei Starkwind greift Sonnenheizen nicht.
+        Der "Mindestabstand zwischen Nachführ-Fahrten" aus dem Sonnenschutz-Abschnitt
+        gilt auch für das Öffnen durch Sonnenheizen.
         ⚠️ Benötigt einen EIGENEN input_boolean-Helfer (nicht denselben wie der
         Sonnenschutz-Helfer!).
       icon: mdi:sun-thermometer
@@ -1156,6 +1186,7 @@ variables:
   shading_min_change: !input shading_min_change
   shading_override_threshold: !input shading_override_threshold
   shading_override_duration: !input shading_override_duration
+  min_move_interval: !input min_move_interval
   force_shading: !input force_shading
   shading_weather_states: !input shading_weather_states
   shading_enable_entity: !input shading_enable_entity
@@ -2002,6 +2033,15 @@ actions:
                         {{ shading_override_duration | int(0) > 0
                            and (as_timestamp(now()) - as_timestamp(states[cover_entity].last_updated))
                                >= shading_override_duration | int(0) * 60 }}
+                      # Motorschonung: Zeit seit der letzten Bewegung über last_updated —
+                      # Teilfahrten ändern oft nur current_position, nicht den State.
+                      # 60 s Toleranz, weil eigene Fahrten erst Sekunden nach dem Tick
+                      # enden (sonst würden aus 15 Minuten effektiv 20)
+                      move_interval_ok: >-
+                        {% set s = states[cover_entity] %}
+                        {{ (min_move_interval | float(0)) <= 0
+                           or s is none
+                           or (as_timestamp(now()) - as_timestamp(s.last_updated)) >= (min_move_interval | float(0)) * 60 - 60 }}
                   - if:
                       - "{{ is_state(shading_status_helper, 'on') }}"
                     then:
@@ -2010,8 +2050,11 @@ actions:
                       # wandert pro Tick nur wenige Prozent) — das war ein manueller
                       # Eingriff und wird bis zum Beschattungs-Ende respektiert — mit
                       # gesetzter Dauer nur, bis der Rollladen mindestens so lange stillsteht.
+                      # Der Mindestabstand bremst nur dieses Nachführen; Beginn und
+                      # Ende der Beschattung laufen immer sofort.
                       - if:
                           - "{{ deviation >= shading_min_change and (deviation <= shading_override_threshold or override_expired) }}"
+                          - "{{ move_interval_ok }}"
                         then:
                           - action: cover.set_cover_position
                             target:
@@ -2129,6 +2172,12 @@ actions:
                   0
                 {% endif %}
               storm_ok: "{{ not storm_enabled or (wind_now | float(0)) < wind_speed_threshold }}"
+              # Motorschonung wie beim Nachführen der Beschattung (siehe dort)
+              move_interval_ok: >-
+                {% set s = states[cover_entity] %}
+                {{ (min_move_interval | float(0)) <= 0
+                   or s is none
+                   or (as_timestamp(now()) - as_timestamp(s.last_updated)) >= (min_move_interval | float(0)) * 60 - 60 }}
           - choose:
               # Sonnenheizen starten: heruntergelassenen Rollladen öffnen.
               # Der Sturmschutz hat immer Vorrang: bei Starkwind wird nicht geöffnet
@@ -2138,6 +2187,9 @@ actions:
                   - "{{ sun_in_window and outdoor_temp <= solar_heating_temp_threshold }}"
                   - "{{ not night_mode_on }}"
                   - "{{ storm_ok }}"
+                  # Mindestabstand als Bedingung (nicht erst vor der Fahrt): Der Helfer
+                  # bleibt aus, der nächste Tick nach Ablauf öffnet regulär
+                  - "{{ move_interval_ok }}"
                   - >-
                     {{ state_attr(cover_entity, 'current_position') is not none
                        and state_attr(cover_entity, 'current_position') | int(101) < solar_heating_min_position }}
