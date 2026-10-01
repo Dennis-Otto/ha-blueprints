@@ -611,6 +611,30 @@ blueprint:
           selector:
             entity:
               domain: input_boolean
+        night_close_position:
+          name: Nachtposition bei geschlossenem Fenster
+          description: >
+            Position (in %), auf die nachts gefahren wird, wenn das Fenster
+            geschlossen ist. 0 = ganz schließen (bisheriges Verhalten). Bei einem
+            höheren Wert wird nur abwärts gefahren: Steht der Rollladen schon
+            tiefer, bleibt er dort — nachts wird nie wieder teilweise geöffnet.
+            Tipp: Wer nachts einen Lüftungsschlitz möchte, stellt eine kleine
+            Position ein (z.B. denselben Wert wie "Nachtposition bei offenem
+            Fenster"). Rollläden ohne Positionsangabe (nur auf/zu) schließen
+            weiterhin ganz.
+            ⚠️ Keine allgemeine Untergrenze: Sturmschutz im Panzer-Modus,
+            "Schließen erzwingen" und der "Rollladen schließen"-Knopf einer
+            Benachrichtigung schließen weiterhin ganz, und bei gekipptem/offenem
+            Fenster fährt der Nachtmodus wie bisher auf die Kipp-Position bzw. die
+            Nachtposition bei offenem Fenster — diese daher nicht tiefer einstellen.
+          default: 0
+          selector:
+            number:
+              min: 0
+              max: 100
+              step: 1
+              mode: slider
+              unit_of_measurement: "%"
         night_ventilation_position:
           name: Nachtposition bei offenem Fenster
           description: >
@@ -796,6 +820,7 @@ variables:
   treat_open_as_tilted: !input treat_open_as_tilted
   morning_position: !input morning_position
   night_mode_boolean: !input night_mode_boolean
+  night_close_position: !input night_close_position
   night_ventilation_position: !input night_ventilation_position
   storm_enabled: !input storm_enabled
   weather_entity: !input weather_entity
@@ -1041,9 +1066,24 @@ actions:
                     data:
                       position: !input night_ventilation_position
             default:
-              - action: cover.close_cover
-                target:
-                  entity_id: !input cover
+              # Fenster zu: ganz schließen (Nachtposition 0 oder Cover ohne
+              # Positionsangabe), sonst nur abwärts auf die Nachtposition — ein
+              # schon tieferer Rollladen wird nachts nicht wieder teilgeöffnet
+              - choose:
+                  - conditions:
+                      - "{{ night_close_position | int(0) == 0 or state_attr(cover_entity, 'current_position') is none }}"
+                    sequence:
+                      - action: cover.close_cover
+                        target:
+                          entity_id: !input cover
+                  - conditions:
+                      - "{{ state_attr(cover_entity, 'current_position') | int(-1) > night_close_position | int(0) }}"
+                    sequence:
+                      - action: cover.set_cover_position
+                        target:
+                          entity_id: !input cover
+                        data:
+                          position: !input night_close_position
 
       # --- STURMSCHUTZ ---
       - conditions:
@@ -1130,9 +1170,22 @@ actions:
                         data:
                           position: !input night_ventilation_position
                 default:
-                  - action: cover.close_cover
-                    target:
-                      entity_id: !input cover
+                  # Wie im Nachtmodus-Zweig: ganz schließen oder nur abwärts auf die Nachtposition
+                  - choose:
+                      - conditions:
+                          - "{{ night_close_position | int(0) == 0 or state_attr(cover_entity, 'current_position') is none }}"
+                        sequence:
+                          - action: cover.close_cover
+                            target:
+                              entity_id: !input cover
+                      - conditions:
+                          - "{{ state_attr(cover_entity, 'current_position') | int(-1) > night_close_position | int(0) }}"
+                        sequence:
+                          - action: cover.set_cover_position
+                            target:
+                              entity_id: !input cover
+                            data:
+                              position: !input night_close_position
 
       # --- SONNENSCHUTZ ---
       - conditions:
@@ -1601,13 +1654,26 @@ actions:
             else:
               - choose:
                   # Fenster zu + Nachtmodus inzwischen aktiv → schließen statt restaurieren
+                  # (wie im Nachtmodus-Zweig: ganz oder nur abwärts auf die Nachtposition)
                   - conditions:
                       - "{{ night_mode_on_now }}"
                       - "{{ not pause_now }}"
                     sequence:
-                      - action: cover.close_cover
-                        target:
-                          entity_id: !input cover
+                      - choose:
+                          - conditions:
+                              - "{{ night_close_position | int(0) == 0 or state_attr(cover_entity, 'current_position') is none }}"
+                            sequence:
+                              - action: cover.close_cover
+                                target:
+                                  entity_id: !input cover
+                          - conditions:
+                              - "{{ state_attr(cover_entity, 'current_position') | int(-1) > night_close_position | int(0) }}"
+                            sequence:
+                              - action: cover.set_cover_position
+                                target:
+                                  entity_id: !input cover
+                                data:
+                                  position: !input night_close_position
                   # Normalfall: Ausgangsposition wiederherstellen (nur wenn der
                   # Snapshot existiert, kein Sturm aktiv ist und keine Pause läuft).
                   # Existenz via expand

@@ -46,7 +46,7 @@ Fenster, bis der Helfer gesetzt oder das Feature deaktiviert ist.
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
 | Morgens öffnen      | Fährt zur eingestellten Uhrzeit auf die Zielposition (nur wenn geschlossener)                                                    | `input_datetime`-Helfer (nur Uhrzeit)      |
 | Fenster-Interaktion | Kippen → Lüftungsposition, Öffnen → ganz auf (optional: wie Kippen behandeln); nach dem Schließen zurück in die Ausgangsposition | — (immer aktiv)                            |
-| Nachtmodus          | Schließt beim Einschalten des Helfers; offene/gekippte Fenster bekommen eine Lüftungsposition                                    | `input_boolean`-Helfer                     |
+| Nachtmodus          | Schließt beim Einschalten des Helfers ganz oder auf eine Nachtposition; offene/gekippte Fenster bekommen eine Lüftungsposition   | `input_boolean`-Helfer                     |
 | Sturmschutz         | Fährt bei Starkwind hoch (oder im Panzer-Modus herunter)                                                                         | Wetter-Entität oder Wind-Sensor            |
 | Sonnenschutz        | Beschattet anhand des Sonnenstands so, dass die Sonne höchstens X m in den Raum fällt; öffnet nach Ende wieder                   | Status-Helfer, Geometrie, Temperaturquelle |
 | Sonnenheizen        | Öffnet im Winter vergessene Rollos, wenn Sonne ins Fenster scheint und es kalt ist                                               | eigener Status-Helfer, Geometrie           |
@@ -120,6 +120,22 @@ Wandtaster kam (die Positions-Rückmeldung kommt immer vom Gerät selbst). Ein
 neustartfest zu speichern — und genau darauf bauen das automatische Wiederöffnen,
 die Einmal-Logik des Sonnenheizens und die Eingriffs-Erkennung auf.
 
+### Nachtmodus und Nachtposition
+
+Schaltet sich der Nachtmodus-Helfer ein, richtet sich der Rollladen nach dem Fenster:
+gekippt → Kipp-Position, offen → "Nachtposition bei offenem Fenster", geschlossen →
+"Nachtposition bei geschlossenem Fenster". Die steht standardmäßig auf 0 % — der
+Rollladen schließt dann wie bisher ganz. Mit einem höheren Wert bleibt nachts ein Spalt
+offen, etwa als Lüftungsschlitz oder weil der Rollladen gar nicht ganz zufahren soll.
+
+Die Nachtposition wird nur **abwärts** angefahren: Steht der Rollladen schon tiefer
+(z. B. abends von Hand ganz geschlossen), bleibt er dort — nachts wird nie wieder
+teilweise geöffnet. Dieselbe Regel gilt, wenn ein gelüftetes Fenster geschlossen wird
+und inzwischen der Nachtmodus aktiv ist, und wenn das Ende einer Pause den Nachtmodus
+nachholt. Ganz geschlossen wird dagegen weiterhin beim Sturmschutz im Panzer-Modus,
+bei "Schließen erzwingen" und über den "Rollladen schließen"-Knopf einer
+Benachrichtigung. Rollläden ohne Positions-Angabe schließen nachts immer ganz.
+
 ## Bekannte Grenzen
 
 - **Wind-Sensor kurz nicht verfügbar** zählt als "windstill". Bewusste Entscheidung:
@@ -128,12 +144,20 @@ die Einmal-Logik des Sonnenheizens und die Eingriffs-Erkennung auf.
 - **Wetterlagen-Filter:** Flattert das Wetter zwischen zwei _nicht_ erlaubten Lagen
   (z. B. Regen ↔ Starkregen), beendet erst Sonnenstand oder Temperatur die
   Beschattung. Der Filter beendet nur bei mindestens 10 Minuten stabil schlechter Lage.
-- **Cover ohne Positions-Angabe** (nur auf/zu): Morgens-Öffnen funktioniert,
-  Kipp-Position und Beschattung werden übersprungen — sie brauchen Positionsdaten.
+- **Cover ohne Positions-Angabe** (nur auf/zu): Morgens-Öffnen funktioniert, der
+  Nachtmodus schließt ganz (statt auf die Nachtposition), Kipp-Position und Beschattung
+  werden übersprungen — sie brauchen Positionsdaten.
 - **Windgeschwindigkeit** wird roh mit dem Grenzwert verglichen — liefert deine Quelle
   m/s statt km/h, muss der Grenzwert entsprechend gesetzt werden.
 - **Sturm-Ende:** Nach dem Sturm bleibt der Rollladen in der Schutzposition, bis das
   nächste reguläre Ereignis (Nachtmodus, Morgens, Beschattung) ihn übernimmt.
+- **Nachtposition ist keine Untergrenze:** Sturmschutz im Panzer-Modus, "Schließen
+  erzwingen" und der Benachrichtigungs-Knopf schließen weiterhin ganz. Bei gekipptem
+  oder offenem Fenster fährt der Nachtmodus auf die Kipp-Position bzw. die
+  Nachtposition bei offenem Fenster, auch wenn diese tiefer liegen — sie sollten daher
+  nicht unter der Nachtposition bei geschlossenem Fenster liegen. Darf ein Rollladen nie
+  ganz zufahren (z. B. wegen eines Klimaschlauchs im Fenster), diese Funktionen
+  entsprechend einstellen bzw. nicht nutzen.
 
 ## FAQ
 
@@ -142,7 +166,14 @@ Home-Assistant-Konvention: 100 % = ganz offen, 0 % = ganz geschlossen. Die Proze
 sind dabei die Werte deines Cover-Aktors, also Motor-Laufweg — nicht zwingend
 Glasfläche. Für die Beschattung lässt sich dieser Unterschied über die
 Glas-Kalibrierung (siehe oben) ausgleichen; alle anderen Positions-Eingaben
-(morgens, Kipp-Position, Nachtlüftung) sind bewusst direkte Aktor-Werte.
+(morgens, Kipp-Position, Nachtpositionen) sind bewusst direkte Aktor-Werte.
+
+**Kann der Rollladen nachts auf einer Position statt ganz zu stehen?** Ja — im
+Abschnitt "Nachtmodus" die "Nachtposition bei geschlossenem Fenster" auf den
+gewünschten Wert stellen (0 % = ganz zu, wie bisher). Für einen Lüftungsschlitz reicht
+eine kleine Position, z. B. derselbe Wert wie die "Nachtposition bei offenem Fenster".
+Der Rollladen fährt dabei nur abwärts: Hast du ihn abends schon von Hand weiter
+geschlossen, bleibt er dort.
 
 **Die Beschattung tut nichts — warum?** Prüfe in dieser Reihenfolge: Gibt es eine
 Benachrichtigung wegen fehlendem Status-Helfer? Ist eine Temperaturquelle gesetzt
