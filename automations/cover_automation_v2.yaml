@@ -1727,7 +1727,8 @@ actions:
                     - "{{ cover_entity }}"
           - choose:
               # Regenschutz: Es regnet bereits — statt der Lüftungsposition höchstens
-              # die Regenposition (nur abwärts). Sturm hat Vorrang (außer Panzer-Modus)
+              # die Regenposition (nur abwärts). Sturm hat Vorrang (außer Panzer-Modus).
+              # Beschattungs-Status bleibt an (siehe rain_start)
               - conditions:
                   - "{{ rain_hold }}"
                   - "{{ not rain_storm_active or panzer_mode }}"
@@ -1748,12 +1749,6 @@ actions:
                           entity_id: !input cover
                         data:
                           position: !input rain_position
-                      - if:
-                          - "{{ shading_status_helper is string and is_state(shading_status_helper, 'on') }}"
-                        then:
-                          - action: input_boolean.turn_off
-                            target:
-                              entity_id: "{{ shading_status_helper }}"
               - conditions:
                   - "{{ trigger.to_state.state == 'tilted' or (treat_open_as_tilted and trigger.to_state.state in ['on', 'open']) }}"
                   - "{{ state_attr(cover_entity, 'current_position') | int(101) < tilted_position }}"
@@ -1892,19 +1887,16 @@ actions:
                   scene_id: "{{ 'rain_' ~ (cover_entity | slugify) }}"
                   snapshot_entities:
                     - "{{ cover_entity }}"
+          # Beschattungs-Status bewusst NICHT freigeben: Während des Regens ruht die
+          # Beschattung ohnehin. Bliebe der Helfer aus, ginge ein Beschattungs-Ende
+          # verloren, das in den Regen fällt (Sonne weg) — nach dem Zurückfahren
+          # bliebe der Rollladen bis zur Nacht in der Beschattungsposition. So führt
+          # der nächste Tick nach dem Regen nach oder beendet regulär
           - action: cover.set_cover_position
             target:
               entity_id: !input cover
             data:
               position: !input rain_position
-          # Regenfahrt ist eine Fremdbewegung, kein manueller Eingriff:
-          # Beschattungs-Status freigeben
-          - if:
-              - "{{ shading_status_helper is string and is_state(shading_status_helper, 'on') }}"
-            then:
-              - action: input_boolean.turn_off
-                target:
-                  entity_id: "{{ shading_status_helper }}"
 
       # --- REGENSCHUTZ: REGEN VORBEI → ZURÜCKFAHREN ---
       # Läuft auch während der Pause (Gate-Ausnahme), damit der Snapshot sicher
@@ -1915,7 +1907,8 @@ actions:
           - "{{ expand(rain_scene) | count > 0 }}"
         sequence:
           # Zustand jetzt bewerten: Fenster noch im geschützten Zustand, kein
-          # Nachtmodus, kein Sturm, keine Pause — sonst nur den Snapshot verwerfen
+          # Nachtmodus, kein Sturm, keine Pause — sonst nur den Snapshot verwerfen.
+          # Der Beschattungs-Status bleibt an (siehe rain_start)
           - if:
               - "{{ rain_restore }}"
               - "{{ rain_window_protected }}"
@@ -1926,13 +1919,6 @@ actions:
               - action: scene.turn_on
                 target:
                   entity_id: "{{ rain_scene }}"
-              # Zurückfahren ist eine Fremdbewegung: Beschattungs-Status freigeben
-              - if:
-                  - "{{ shading_status_helper is string and is_state(shading_status_helper, 'on') }}"
-                then:
-                  - action: input_boolean.turn_off
-                    target:
-                      entity_id: "{{ shading_status_helper }}"
           # Der Regen ist vorbei: Snapshot in jedem Fall verwerfen, sonst würde der
           # nächste Regen ihn nicht neu anlegen (continue_on_error: paralleler Lauf
           # hat ihn evtl. schon gelöscht)

@@ -145,9 +145,12 @@ Solange der Regenschutz greift, fährt kein anderes Feature den Rollladen darüb
 hinaus: Beschattung und Sonnenheizen ruhen (ihr Sonnenstand ist reine Geometrie und
 sagt nichts über echten Sonnenschein), der Nachtmodus fährt höchstens auf die
 Regenposition, und das Morgens-Öffnen wird vorgemerkt — beim Zurückfahren nach dem
-Regen geht es dann direkt auf die Morgen-Position. Die Regenfahrt zählt nicht als
-manueller Eingriff in die Beschattung. Der Sturmschutz hat Vorrang: Bei Starkwind
-fährt der Regenschutz nicht herunter (außer im Panzer-Modus, dort ist Herunterfahren
+Regen geht es dann direkt auf die Morgen-Position. Eine laufende Beschattung bleibt
+während des Regens bestehen und ruht nur: Nach dem Zurückfahren führt der nächste Tick
+sie weiter oder beendet sie regulär, wenn die Sonne inzwischen weg ist. Ohne
+Zurückfahren gilt eine große Abweichung zur Regenposition wie ein manueller Eingriff
+— der Rollladen bleibt dann bis zum Ende der Beschattung tiefer. Der Sturmschutz hat
+Vorrang: Bei Starkwind fährt der Regenschutz nicht herunter (außer im Panzer-Modus, dort ist Herunterfahren
 ohnehin die Schutzrichtung). Regnet es beim Ende einer Pause, wird der Regenschutz
 nachgeholt.
 
