@@ -77,7 +77,7 @@ Danach kommt die Pause (solange ihr Helfer an ist, passiert sonst gar nichts),
 dann der Nachtmodus (nachts wird nicht beschattet, nicht geheizt und beim
 Fensteröffnen nur bis zur Lüftungsposition geöffnet), dann erst die Komfort-Features.
 Der **Frostschutz** ist keine eigene Fahrt, sondern eine Obergrenze für deren
-Öffnungsfahrten — den Sturmschutz begrenzt er bewusst nicht.
+Öffnungsfahrten — den Sturmschutz und das Notfall-Öffnen begrenzt er bewusst nicht.
 
 ## Verhalten verstehen
 
@@ -251,7 +251,8 @@ Ereignis bewegt.
 Der **Sturmschutz** fährt auch bei Frost ganz hoch. Ein teilweise heruntergelassener
 Panzer bietet dem Wind Angriffsfläche und schlägt in den Schienen, der eingefahrene
 Panzer ist im Kasten geschützt — Schutz vor Wind hat Vorrang. Im Panzer-Modus
-(schließen bei Sturm) stellt sich die Frage ohnehin nicht.
+(schließen bei Sturm) stellt sich die Frage ohnehin nicht. Ebenso fährt das
+**Notfall-Öffnen** immer ganz auf — Fluchtweg und Zugang für die Feuerwehr gehen vor.
 
 ### Notfall-Öffnen (Rauchmelder, Hagelwarnung)
 
@@ -274,8 +275,10 @@ die Automation nicht: Wer den Rollladen von Hand herunterfährt, wird erst durch
 einen erneuten Alarm wieder übersteuert.
 
 Melden alle Sensoren wieder `off`, holt die Automation einen inzwischen aktiven
-Nachtmodus nach (bei offenem oder gekipptem Fenster mit Lüftungsposition, bei
-Sturm gar nicht, während einer Pause erst zu deren Ende). Die Beschattung bewertet
+Nachtmodus nach (bei offenem oder gekipptem Fenster mit Lüftungsposition, während
+einer Pause erst zu deren Ende). Hält ein Sturm an, hat er Vorrang: Im Panzer-Modus
+wird das vom Notfall verhinderte Schließen nachgeholt, sonst bleibt der Rollladen
+oben. Die Beschattung bewertet
 der nächste Tick frisch. Die Position vor dem Alarm wird nicht wiederhergestellt,
 weitere verpasste Ereignisse werden nicht nachgeholt.
 
@@ -371,9 +374,6 @@ Panzer ist teurer als ein Rollladen, der eine Nacht oben bleibt.
   Automation beim Alarm einschaltet und der erst von Hand zurückgesetzt wird.
   Endet der Alarm während eines Neustarts, wird der Nachtmodus ebenfalls nicht
   nachgeholt.
-- **Sturm nach dem Notfall:** Hält der Sturm nach dem Notfall an, wird der
-  Sturmschutz nicht nachgeholt — im Panzer-Modus bleibt der Rollladen oben, bis der
-  Wind die Schwelle erneut überschreitet oder ein reguläres Ereignis ihn übernimmt.
 - **Hindernis-Sperre gilt nur für diese Automation:** Wandtaster, Szenen und andere
   Automationen fahren den Rollladen weiterhin herunter. Fahrten nach oben laufen auch
   während der Sperre. Die Sperre verhindert nur den _Start_ einer Abwärtsfahrt — wird
