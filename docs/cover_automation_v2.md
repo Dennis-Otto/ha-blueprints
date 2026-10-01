@@ -145,8 +145,10 @@ die Automation nicht: Wer den Rollladen von Hand herunterfährt, wird erst durch
 einen erneuten Alarm wieder übersteuert.
 
 Melden alle Sensoren wieder `off`, holt die Automation einen inzwischen aktiven
-Nachtmodus nach (bei offenem oder gekipptem Fenster mit Lüftungsposition, bei
-Sturm gar nicht, während einer Pause erst zu deren Ende). Die Beschattung bewertet
+Nachtmodus nach (bei offenem oder gekipptem Fenster mit Lüftungsposition, während
+einer Pause erst zu deren Ende). Hält ein Sturm an, hat er Vorrang: Im Panzer-Modus
+wird das vom Notfall verhinderte Schließen nachgeholt, sonst bleibt der Rollladen
+oben. Die Beschattung bewertet
 der nächste Tick frisch. Die Position vor dem Alarm wird nicht wiederhergestellt,
 weitere verpasste Ereignisse werden nicht nachgeholt.
 
@@ -182,9 +184,6 @@ im Brandfall überhaupt Strom geschaltet werden soll.
   Automation beim Alarm einschaltet und der erst von Hand zurückgesetzt wird.
   Endet der Alarm während eines Neustarts, wird der Nachtmodus ebenfalls nicht
   nachgeholt.
-- **Sturm nach dem Notfall:** Hält der Sturm nach dem Notfall an, wird der
-  Sturmschutz nicht nachgeholt — im Panzer-Modus bleibt der Rollladen oben, bis der
-  Wind die Schwelle erneut überschreitet oder ein reguläres Ereignis ihn übernimmt.
 
 ## FAQ
 

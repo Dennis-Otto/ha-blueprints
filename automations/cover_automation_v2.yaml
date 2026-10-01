@@ -1239,7 +1239,8 @@ actions:
             {{ sensors | reject('is_state', 'off') | list | length == 0 }}
         sequence:
           # Wie beim Pause-Ende: Ein während des Notfalls verpasster Nachtmodus
-          # wird nachgeholt, Sturm hat Vorrang. Die Beschattung bewertet der
+          # wird nachgeholt, Sturm hat Vorrang (im Panzer-Modus wird das vom
+          # Notfall verhinderte Schließen nachgeholt). Die Beschattung bewertet der
           # nächste Tick neu (Status-Helfer wurde beim Öffnen freigegeben).
           # Läuft gerade eine Pause, sortiert das Gate oben diesen Lauf aus —
           # dann holt das Pause-Ende den Nachtmodus nach
@@ -1252,31 +1253,45 @@ actions:
                 {% else %}
                   0
                 {% endif %}
-          - if:
-              - "{{ night_mode_boolean is string and is_state(night_mode_boolean, 'on') }}"
-              - "{{ not storm_enabled or (wind_now | float(0)) < wind_speed_threshold }}"
-            then:
-              - choose:
-                  - conditions:
-                      - "{{ states(window_sensor) == 'tilted' or (treat_open_as_tilted and states(window_sensor) in ['on', 'open']) }}"
-                    sequence:
-                      - action: cover.set_cover_position
+          - choose:
+              # Sturm hält an: Im Panzer-Modus das Schließen nachholen (gleiche
+              # Fenster-Regel wie beim Sturmschutz) — der Sturm-Trigger feuert erst
+              # beim nächsten Überschreiten der Schwelle wieder. Ohne Panzer-Modus
+              # bleibt der Rollladen oben, wo der Sturmschutz ihn ohnehin haben will
+              - conditions:
+                  - "{{ storm_enabled and (wind_now | float(0)) >= wind_speed_threshold }}"
+                sequence:
+                  - if:
+                      - "{{ panzer_mode }}"
+                      - "{{ force_storm_action or states(window_sensor) in ['off', 'closed'] }}"
+                    then:
+                      - action: cover.close_cover
                         target:
                           entity_id: !input cover
-                        data:
-                          position: !input tilted_position
-                  - conditions:
-                      - "{{ states(window_sensor) in ['on', 'open'] }}"
-                    sequence:
-                      - action: cover.set_cover_position
+              - conditions:
+                  - "{{ night_mode_boolean is string and is_state(night_mode_boolean, 'on') }}"
+                sequence:
+                  - choose:
+                      - conditions:
+                          - "{{ states(window_sensor) == 'tilted' or (treat_open_as_tilted and states(window_sensor) in ['on', 'open']) }}"
+                        sequence:
+                          - action: cover.set_cover_position
+                            target:
+                              entity_id: !input cover
+                            data:
+                              position: !input tilted_position
+                      - conditions:
+                          - "{{ states(window_sensor) in ['on', 'open'] }}"
+                        sequence:
+                          - action: cover.set_cover_position
+                            target:
+                              entity_id: !input cover
+                            data:
+                              position: !input night_ventilation_position
+                    default:
+                      - action: cover.close_cover
                         target:
                           entity_id: !input cover
-                        data:
-                          position: !input night_ventilation_position
-                default:
-                  - action: cover.close_cover
-                    target:
-                      entity_id: !input cover
 
       # --- SONNENSCHUTZ ---
       - conditions:
