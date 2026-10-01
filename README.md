@@ -19,8 +19,8 @@ Pro Fenster/Rollladen wird eine eigene Automation erstellt — gemeinsame Helfer
 - Sturmschutz (Wetter-Entität oder Wind-Sensor, optionaler Panzer-Modus) — hat Vorrang vor allem außer dem Notfall-Öffnen
 - Notfall-Öffnen bei Rauch-/CO-Alarm oder Hagelwarnung (fährt auf und lässt den Rollladen oben, bis alle Sensoren wieder aus sind)
 - Sonnenschutz/Beschattung anhand des Sonnenstands (Fenster-Geometrie, Temperatur-Schwelle
-  mit Hysterese, optionaler Wetterlagen-Filter und Freigabe-Helfer, erkennt manuelle
-  Eingriffe)
+  mit Hysterese, optionaler Wetterlagen-Filter, Freigabe-Helfer und Blendschutz auch
+  bei Kälte, erkennt manuelle Eingriffe)
 - Sonnenheizen für die Heizperiode (öffnet vergessene Rollos bei Sonne und Kälte)
 - Frostschutz (öffnet bei Frost nur bis zu einer Maximalposition, z. B. 90 %)
 - Moskito-Modus (Licht aus im Raum, wenn das Fenster nach Sonnenuntergang geöffnet wird)
