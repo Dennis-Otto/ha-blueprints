@@ -53,7 +53,7 @@ Fenster, bis der Helfer gesetzt oder das Feature deaktiviert ist.
 | Feature             | Was es tut                                                                                                                                                                | Voraussetzung                              |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
 | Morgens öffnen      | Fährt zur eingestellten Uhrzeit auf die Zielposition (nur wenn geschlossener)                                                                                             | `input_datetime`-Helfer (nur Uhrzeit)      |
-| Fenster-Interaktion | Kippen → Lüftungsposition, Öffnen → ganz auf (optional: wie Kippen behandeln); nach dem Schließen zurück in die Ausgangsposition                                          | Fenstersensor (dann immer aktiv)           |
+| Fenster-Interaktion | Kippen → Lüftungsposition, Öffnen → ganz auf/Wunschposition (optional: wie Kippen); beim Schließen zurück; Reaktionszeit wählbar                                          | Fenstersensor (dann immer aktiv)           |
 | Nachtmodus          | Schließt beim Einschalten des Helfers oder zur eigenen Uhrzeit ganz oder auf eine Nachtposition; offene/gekippte Fenster bekommen bis zum Schließen eine Lüftungsposition | `input_boolean` oder Uhrzeit-Helfer        |
 | Sturmschutz         | Fährt bei Starkwind hoch (oder im Panzer-Modus herunter)                                                                                                                  | Wetter-Entität oder Wind-Sensor            |
 | Sonnenschutz        | Beschattet nach Sonnenstand, sodass die Sonne höchstens X m in den Raum fällt; öffnet danach wieder; optional nur bei Freigabe oder im Zeitfenster                        | Status-Helfer, Geometrie, Temperaturquelle |
@@ -385,8 +385,9 @@ Panzer ist teurer als ein Rollladen, der eine Nacht oben bleibt.
   Beschattung. Der Filter beendet nur bei mindestens 10 Minuten stabil schlechter Lage.
 - **Cover ohne Positions-Angabe** (nur auf/zu): Morgens-Öffnen funktioniert, der
   Nachtmodus schließt ganz (statt auf die Nachtposition), Kipp-Position und Beschattung
-  werden übersprungen — sie brauchen Positionsdaten. Auch der Frostschutz kann solche
-  Cover nicht begrenzen: Öffnen heißt hier immer ganz auf.
+  werden übersprungen — sie brauchen Positionsdaten. Beim Öffnen des Fensters fährt
+  der Rollladen immer ganz auf; weder "Position bei geöffnetem Fenster" noch
+  Frostschutz können solche Cover begrenzen.
 - **Frostschutz:** Kipp- und Nachtlüftungs-Position werden nicht begrenzt (sie liegen
   normalerweise weit unter der Frost-Position), ebenso wenig das Zurückfahren nach dem
   Lüften (es stellt nur die Position von vorher wieder her). Auch die Nachführung der
@@ -461,6 +462,15 @@ Panzer ist teurer als ein Rollladen, der eine Nacht oben bleibt.
   _Toleranz für manuelle Eingriffe_ lässt den nachgeholten Schritt wie eine
   Handbetätigung aussehen — das Nachführen ruht dann bis zum Beschattungs-Ende
   (Richtwerte siehe "Mindestabstand zwischen Nachführ-Fahrten").
+- **Reaktionszeit und Benachrichtigungen:** Die Reaktionszeit verzögert nur das
+  Abräumen der Meldung nach dem Schließen. Wann eine "Fenster zu lange
+  offen/gekippt"-Meldung verschickt wird, bestimmen weiterhin allein deren eigene
+  Wartezeiten (in Minuten ab dem Öffnen).
+- **Kurz zu, gleich wieder auf:** Wird das Fenster kürzer als die Reaktionszeit
+  geschlossen und dann wieder geöffnet, wertet die Automation das als neues
+  Öffnen und merkt sich die gerade aktuelle (schon geöffnete) Position als
+  Ausgangsposition. Nach dem endgültigen Schließen bleibt der Rollladen dann
+  oben, statt zurückzufahren. Je größer die Reaktionszeit, desto eher passiert das.
 
 ## FAQ
 
@@ -469,7 +479,7 @@ Home-Assistant-Konvention: 100 % = ganz offen, 0 % = ganz geschlossen. Die Proze
 sind dabei die Werte deines Cover-Aktors, also Motor-Laufweg — nicht zwingend
 Glasfläche. Für die Beschattung lässt sich dieser Unterschied über die
 Glas-Kalibrierung (siehe oben) ausgleichen; alle anderen Positions-Eingaben
-(morgens, Kipp-Position, Nachtpositionen, Frost-Position) sind bewusst direkte
+(morgens, Kipp-Position, geöffnetes Fenster, Nachtpositionen, Frost-Position) sind bewusst direkte
 Aktor-Werte.
 
 **Kann der Rollladen nachts auf einer Position statt ganz zu stehen?** Ja — im
@@ -547,6 +557,26 @@ Sonnenschutz und Sonnenheizen arbeiten ganz normal. Fenster-Interaktion
 sie vom Fensterzustand leben. ⚠️ Bei Balkon- oder Terrassentüren ohne Kontakt fahren
 Nachtmodus, Beschattung und Panzer-Modus auch bei offener Tür herunter —
 Aussperr-Gefahr.
+**Der Rollladen soll beim Öffnen nicht ganz hochfahren — z. B. als Durchgang für
+die Katze?** Dafür gibt es in der Fenster-Interaktion die "Position bei geöffnetem
+Fenster" (Standard 100 % = ganz auf). Stell sie z. B. auf 25 %: Wird das Fenster
+komplett geöffnet, fährt der Rollladen nur bis dorthin — und nur nach oben; steht
+er schon höher, bleibt er stehen. Nachts (Nachtmodus an) gilt stattdessen die
+"Nachtposition bei offenem Fenster" im Abschnitt Nachtmodus — für die Katze dort
+ebenfalls eine passende Höhe wählen. Ohne Nachtmodus-Helfer gilt die Position bei
+geöffnetem Fenster rund um die Uhr. ⚠️ Bei Balkon- und Terrassentüren muss die
+Position hoch genug zum Durchgehen sein.
+
+**Ich öffne das Fenster nur kurz (Blumen gießen) — muss der Rollladen jedes Mal
+hochfahren?** Nein: Die "Reaktionszeit" in der Fenster-Interaktion legt fest, wie
+lange das Fenster unverändert offen bzw. gekippt sein muss, bevor der Rollladen
+reagiert — und wie lange es nach dem Lüften geschlossen sein muss, bevor er
+zurückfährt. Standard sind 2 Sekunden, das filtert nur prellende Kontakte. Mit
+z. B. 30 Sekunden bleibt der Rollladen beim kurzen Öffnen einfach stehen. Die
+Kehrseite: Bei Balkon- und Terrassentüren dauert es entsprechend länger, bis der
+Rollladen hochfährt. Die Reaktionszeit gilt auch für den Moskito-Modus und das
+Abräumen der Benachrichtigung, nicht aber für die Wartezeit, nach der eine
+Benachrichtigung verschickt wird.
 
 **Kann ich die Automation zeitweise anhalten?** Ja — im Abschnitt "Pausieren" einen
 einen oder mehrere `input_boolean`-Helfer auswählen. Die Logik ist wählbar: "AN
