@@ -283,6 +283,10 @@ ausgenommen. Stellst du den Rollladen manuell ungefähr dorthin, wo die Beschatt
 ihn haben will, übernimmt das Nachführen wieder stillschweigend. Sturm, Lüften,
 Regenschutz, Morgens-Öffnen sowie Schließen und Wiederöffnen durch die Abwesenheit
 zählen dagegen nicht als manuelle Eingriffe — nach ihnen darf sofort wieder beschattet werden.
+Nach einer Pause, einer Hindernis-Sperre oder einer Regenfahrt gleicht der nächste
+Tick eine laufende Beschattung einmal auf die Sollposition ab, statt die Abweichung
+als Handeingriff zu werten (gemerkt in der temporären Szene `scene.shading_resync_…`);
+ist die Sonne inzwischen weg, endet die Beschattung stattdessen regulär.
 
 Soll ein Handgriff nicht die ganze Episode lang gelten, begrenzt die **Dauer für
 manuelle Eingriffe** die Sperre zeitlich (z. B. 60 Minuten): Steht der Rollladen
@@ -546,10 +550,13 @@ hinaus: Beschattung und Sonnenheizen ruhen (ihr Sonnenstand ist reine Geometrie 
 sagt nichts über echten Sonnenschein), der Nachtmodus fährt höchstens auf die
 Regenposition, und das Morgens-Öffnen wird vorgemerkt — beim Zurückfahren nach dem
 Regen geht es dann direkt auf die Morgen-Position. Die Regenfahrt zählt nicht als
-manueller Eingriff in die Beschattung. Der Sturmschutz hat Vorrang: Bei Starkwind
-fährt der Regenschutz nicht herunter (außer im Panzer-Modus, dort ist Herunterfahren
-ohnehin die Schutzrichtung). Regnet es beim Ende einer Pause, wird der Regenschutz
-nachgeholt.
+manueller Eingriff in die Beschattung: Eine laufende Beschattung bleibt bestehen, und
+nach dem Regen gleicht der nächste Tick sie einmal auf die Sollposition ab — oder
+beendet sie regulär, wenn die Sonne inzwischen weg ist. Der Sturmschutz hat Vorrang:
+Bei Starkwind fährt der Regenschutz nicht herunter (außer im Panzer-Modus, dort ist
+Herunterfahren ohnehin die Schutzrichtung). Regnet es beim Ende einer Pause, eines
+Sturms, eines Notfalls oder einer Hindernis-Sperre, wird der Regenschutz nachgeholt,
+ebenso nach einem Neustart (mit "Nach Neustart nachholen").
 
 **Kein Regensensor, aber eine Wetter-Entität?** Ein Template-Binärsensor
 (_Einstellungen → Geräte & Dienste → Helfer → Helfer erstellen → Template →
@@ -754,8 +761,9 @@ Nachtmodus nach (bei offenem oder gekipptem Fenster mit Lüftungsposition, währ
 einer Pause erst zu deren Ende). Hält ein Sturm an, hat er Vorrang: Im Panzer-Modus
 wird das vom Notfall verhinderte Schließen nachgeholt, sonst bleibt der Rollladen
 oben. Die Beschattung bewertet
-der nächste Tick frisch. Die Position vor dem Alarm wird nicht wiederhergestellt,
-weitere verpasste Ereignisse werden nicht nachgeholt.
+der nächste Tick frisch. Regnet es bei gekipptem Fenster, wird der Regenschutz
+nachgeholt. Die Position vor dem Alarm wird nicht wiederhergestellt, weitere
+verpasste Ereignisse werden nicht nachgeholt.
 
 Licht einschalten, Türen entriegeln oder Durchsagen gehören bewusst nicht in
 dieses Blueprint — es steuert nur seinen eigenen Rollladen. Dafür eine eigene
@@ -814,7 +822,8 @@ ununterbrochen unter dem Grenzwert lag:
 - **Tagsüber ohne Panzer-Modus:** Der Rollladen ist schon oben, es wird nichts gefahren.
 
 Den Beschattungs-Status hat schon der Sturmschutz freigegeben, der nächste Tick
-beschattet also bei Bedarf. "Tagsüber" heißt: Nachtmodus aus, Sonne über dem Horizont
+beschattet also bei Bedarf. Einen wegen des Sturms ausgelassenen Regenschutz holt
+das Sturm-Ende immer nach — auch ohne eingestellte Entwarnung. "Tagsüber" heißt: Nachtmodus aus, Sonne über dem Horizont
 und die Uhrzeit fürs Morgens-Öffnen (falls eingerichtet) vorbei. Sonst bleibt der
 Rollladen in der Sturmposition, bis das nächste reguläre Ereignis ihn übernimmt.
 Entwarnt wird nur nach einem echten Unterschreiten des Grenzwerts — meldet die Quelle
@@ -1007,13 +1016,15 @@ ganz.
   Automationen fahren den Rollladen weiterhin herunter. Fahrten nach oben laufen auch
   während der Sperre. Die Sperre verhindert nur den _Start_ einer Abwärtsfahrt — wird
   die Fliegengittertür während einer laufenden Fahrt geöffnet, stoppt sie nicht.
-- **Nach der Sperre** werden nur Nachtmodus und Panzer-Schließen bei Sturm nachgeholt.
+- **Nach der Sperre** werden nur Nachtmodus, Panzer-Schließen bei Sturm und der
+  Regenschutz nachgeholt.
   Ausgelassene Einzelfahrten (Zurückfahren nach dem Lüften, "Schließen erzwingen",
   Knopf-Druck) entfallen — tagsüber bleibt der Rollladen dann oben, bis das nächste
   Ereignis ihn übernimmt. Umgekehrt stellt jede Freigabe einen eingeschalteten
   Nachtmodus her, auch wenn der Rollladen zwischendurch von Hand geöffnet wurde (wie
-  beim Pause-Ende). Außerdem setzt jede Freigabe den Beschattungs-Status zurück: Ein
-  manueller Eingriff während der Beschattung ist danach vergessen.
+  beim Pause-Ende). Außerdem gleicht der nächste Tick eine laufende Beschattung einmal
+  auf ihre Sollposition ab: Ein manueller Eingriff während der Beschattung ist danach
+  vergessen.
 - **Dauerhaft toter Sperr-Sensor** verhindert dauerhaft jedes automatische
   Herunterfahren (siehe oben).
 - **Neustart während der Wartezeit:** Ein Neustart von Home Assistant oder ein
@@ -1101,11 +1112,14 @@ ganz.
 - **Regenschutz und Neustart:** Die Position von vor dem Regen wird in einer
   dynamischen Szene gemerkt und überlebt keinen Home-Assistant-Neustart. Nach einem
   Neustart während des Regens bleibt der Rollladen nach dem Regen in der
-  Regenposition.
+  Regenposition. Mit "Nach Neustart nachholen" wird der Regenschutz nach dem Start
+  wiederhergestellt (dann ohne die Regen-Verzögerung, deren Zeitstempel der Neustart
+  zurücksetzt), und ein verpasstes Morgens-Öffnen wird bei Regen nur vorgemerkt.
 - **Fenster während des Regens geschlossen:** Die gemerkte Position wird verworfen.
   Liegt das Kippen schon länger zurück als das Zeitfenster fürs Zurückfahren, bleibt
   der Rollladen in der Regenposition, bis das nächste reguläre Ereignis ihn
-  übernimmt. Dasselbe gilt, wenn der Regen nachts oder während Sturm/Pause endet.
+  übernimmt. Dasselbe gilt, wenn der Regen nachts oder während Sturm, Pause oder
+  Notfall endet.
 - **Morgens-Öffnen bei Regen** wird nur nachgeholt, wenn "Nach dem Regen
   zurückfahren" aktiv ist; sonst entfällt es, solange der Regenschutz greift.
 - **Regensensor-Typen:** Ausgewertet wird nur an/aus eines `binary_sensor` oder
@@ -1349,8 +1363,9 @@ Sturmschutz greifen weiterhin, und der "Rollladen schließen"-Knopf einer Benach
 funktioniert wie der Wandtaster — bewusste Befehle werden nicht blockiert.
 Praktisch für Videoaufnahmen (konstantes Licht!), schlafende Gäste oder den
 Fensterputzer. Beim Ausschalten holt die Automation einen inzwischen aktiven
-Nachtmodus nach, stellt bei Regen den Regenschutz her und bewertet die Beschattung
-neu; verpasste Einzelereignisse (morgendliches Öffnen, Zurückfahren nach dem Lüften,
+Nachtmodus nach, stellt bei Regen den Regenschutz her und gleicht eine laufende
+Beschattung beim nächsten Tick ab (oder beendet sie, wenn die Sonne inzwischen weg
+ist); verpasste Einzelereignisse (morgendliches Öffnen, Zurückfahren nach dem Lüften,
 Sturm-Entwarnung, Schließen bei Abwesenheit, Wiederöffnen beim Heimkommen) werden
 nicht nachgeholt.
 

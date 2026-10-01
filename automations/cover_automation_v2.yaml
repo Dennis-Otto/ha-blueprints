@@ -1903,6 +1903,11 @@ variables:
   # Neustart-Fenster im Sonnenschutz-Zweig)
   shading_start_marker: "scene.shading_start_{{ cover_entity | slugify }}"
   shading_end_marker: "scene.shading_end_{{ cover_entity | slugify }}"
+  # Merker "Beschattung neu abgleichen": nach Pause, Hindernis oder Regen hat sich
+  # der Sollwert verschoben bzw. der Rollladen wurde fremd bewegt. Der nächste Tick
+  # fährt einmal auf die Sollposition, statt die Abweichung als manuellen Eingriff
+  # zu werten (Status-Helfer bleibt an, damit ein fälliges Ende nicht verloren geht)
+  shading_resync_marker: "scene.shading_resync_{{ cover_entity | slugify }}"
   solar_heating_status_helper: !input solar_heating_status_helper
   solar_heating_temp_threshold: !input solar_heating_temp_threshold
   solar_heating_temp_hysteresis: !input solar_heating_temp_hysteresis
@@ -2460,11 +2465,13 @@ actions:
   # und schaltet keine Lichter. Durch dürfen nur die Notfall-Trigger selbst und
   # die Benachrichtigungen samt Zusatz-Diensten und Abräumen (bewegen nichts;
   # das nächtliche Schließen im Abräum-Zweig prüft den Notfall selbst) sowie die
-  # Verzögerungs-Trigger der Beschattung (pflegen nur ihre Merker, der Zweig
-  # prüft den Notfall danach selbst) und das Festhalten des Status (Diagnose)
+  # Beschattungs-Läufe (pflegen nur ihre Verzögerungs-Merker, der Zweig prüft
+  # den Notfall danach selbst), das Festhalten des Status (Diagnose) und das
+  # Regen-Aufräumen (Snapshot verwerfen; Zurückfahren prüft den Notfall selbst)
   - condition: >-
       {{ trigger.id | default('') in ['emergency_open', 'emergency_ended', 'window_open_long', 'window_tilted_long', 'window_closed',
-                                      'notify_extra_target', 'shading_start_delayed', 'shading_end_delayed', 'status_update']
+                                      'notify_extra_target', 'shading_tick', 'shading_start_delayed', 'shading_end_delayed',
+                                      'status_update', 'rain_end', 'rain_window_closed']
          or not emergency_active }}
   # Pausier-Helfer: hält die AUTOMATIK an, mit diesen Ausnahmen — Notfall-Öffnen
   # (Sicherheit geht vor), Sturmschutz (Hardware-Schutz geht vor),
@@ -2474,12 +2481,12 @@ actions:
   # der Pause nur das Panzer-Schließen nach), das Heimkommen (räumt nur den
   # Abwesenheits-Merker ab, fährt in der Pause nicht), das Regen-Aufräumen
   # (Regen-Snapshot; das Zurückfahren nach dem Regen prüft die Pause selbst) und
-  # die Verzögerungs-Trigger der Beschattung (pflegen nur ihre Merker, der
-  # Zweig prüft die Pause danach selbst) sowie das Festhalten des Status (Diagnose)
+  # die Beschattungs-Läufe (pflegen nur ihre Verzögerungs-Merker, der Zweig
+  # prüft die Pause danach selbst) sowie das Festhalten des Status (Diagnose)
   - condition: >-
       {{ trigger.id | default('') in ['emergency_open', 'storm_detected', 'window_closed', 'close_shutter_action', 'block_released',
-                                      'away_return', 'rain_end', 'rain_window_closed', 'shading_start_delayed', 'shading_end_delayed',
-                                      'status_update']
+                                      'away_return', 'rain_end', 'rain_window_closed', 'shading_tick', 'shading_start_delayed',
+                                      'shading_end_delayed', 'status_update']
          or not pause_active }}
   - choose:
       # --- DIAGNOSE: LETZTE AKTION FESTHALTEN ---
@@ -2519,6 +2526,9 @@ actions:
               - morning_open_sun
               - morning_open_latest
         sequence:
+          # Startzeit des Laufs (der Sonnen-Trigger kennt kein trigger.now)
+          - variables:
+              morning_run_start: "{{ as_timestamp(now()) }}"
           # Nach Sonnenstand pro Tag genau einmal öffnen: "frühestens" (morning_open)
           # nur, wenn die Sonne schon hoch genug steht; der Sonnen-Auslöser nur
           # zwischen frühestens und spätestens; "spätestens" nur, wenn die Sonne die
@@ -2594,6 +2604,14 @@ actions:
               morning_target: >-
                 {{ [morning_position | int, frost_max_position | int] | min if frost_active
                    else morning_position | int }}
+              # Regenschutz jetzt lesen — nach einer Zufallsverzögerung ist rain_hold
+              # vom Laufbeginn veraltet (Regen inzwischen vorbei oder Fenster zu)
+              rain_hold_now: >-
+                {{ rain_sensor is string
+                   and is_state(rain_sensor, 'on')
+                   and (as_timestamp(now()) - as_timestamp(states[rain_sensor].last_changed)) >= (rain_delay | float(0)) * 60 - 1
+                   and ((states(window_sensor) | lower if window_sensor is string else 'closed') == 'tilted'
+                        or ((states(window_sensor) | lower if window_sensor is string else 'closed') in ['on', 'open'] and (treat_open_as_tilted or rain_include_open))) }}
           - if:
               - "{{ storm_enabled and (wind_now | float(0)) >= wind_speed_threshold }}"
             then:
@@ -2605,7 +2623,7 @@ actions:
           # Regenschutz aktiv: nicht öffnen, sondern die Morgen-Position als
           # Rückkehr-Position fürs Regenende vormerken (Regen-Snapshot überschreiben)
           - if:
-              - "{{ rain_hold }}"
+              - "{{ rain_hold_now }}"
             then:
               - if:
                   - "{{ rain_restore }}"
@@ -2753,7 +2771,7 @@ actions:
               - "{{ shading_status_helper is string and is_state(shading_status_helper, 'on') }}"
               # Sanftes Wecken: eine erst während des Weckens gestartete Beschattung
               # hat übernommen und darf nicht wieder freigegeben werden
-              - "{{ morning_soft_duration | int(0) == 0 or as_timestamp(states[shading_status_helper].last_changed) < as_timestamp(trigger.now) }}"
+              - "{{ morning_soft_duration | int(0) == 0 or as_timestamp(states[shading_status_helper].last_changed) < morning_run_start }}"
             then:
               - action: input_boolean.turn_off
                 target:
@@ -2899,6 +2917,13 @@ actions:
           # ein inzwischen geöffnetes Fenster darf nicht zugefahren werden
           - variables:
               win_now: "{{ (states(window_sensor) | lower) if window_sensor is string else 'closed' }}"
+              # Regenschutz mit dem Fenster von jetzt (wie rain_hold oben)
+              rain_hold_now: >-
+                {{ rain_sensor is string
+                   and is_state(rain_sensor, 'on')
+                   and (as_timestamp(now()) - as_timestamp(states[rain_sensor].last_changed)) >= (rain_delay | float(0)) * 60 - 1
+                   and (win_now == 'tilted'
+                        or (win_now in ['on', 'open'] and (treat_open_as_tilted or rain_include_open))) }}
               emergency_now: >-
                 {% set sensors = [emergency_sensors] if emergency_sensors is string else emergency_sensors %}
                 {{ sensors | select('is_state', 'on') | list | length > 0 }}
@@ -2920,7 +2945,7 @@ actions:
           - choose:
               # Regenschutz aktiv: Lüftungsposition höchstens bis zur Regenposition
               - conditions:
-                  - "{{ rain_hold }}"
+                  - "{{ rain_hold_now }}"
                 sequence:
                   - action: cover.set_cover_position
                     target:
@@ -3047,7 +3072,6 @@ actions:
       - conditions:
           - condition: trigger
             id: storm_released
-          - "{{ storm_release_delay | int(0) > 0 }}"
           # Wind-Sensor hat Vorrang: Ist er gesetzt, zählt die Wetter-Entität nicht
           - "{{ not (storm_wind_sensor is string and trigger.entity_id == weather_entity) }}"
           # Nur nach echtem Unterschreiten: Der Wert direkt davor muss numerisch
@@ -3066,6 +3090,45 @@ actions:
             {% endif %}
             {{ is_number(v) and v | float >= wind_speed_threshold }}
         sequence:
+          # Regenschutz nachholen (wie beim Pause-Ende): rain_start feuert nur einmal und
+          # wurde evtl. durch Sturm, Notfall oder Hindernis ausgelassen
+          - if:
+              - "{{ rain_hold }}"
+              - "{{ not rain_storm_active or panzer_mode }}"
+              - "{{ state_attr(cover_entity, 'current_position') | int(-1) > rain_position }}"
+              - "{{ not block_active }}"
+            then:
+              - if:
+                  - "{{ rain_restore and expand(rain_scene) | count == 0 }}"
+                then:
+                  - action: scene.create
+                    data:
+                      scene_id: "{{ 'rain_' ~ (cover_entity | slugify) }}"
+                      snapshot_entities:
+                        - "{{ cover_entity }}"
+              - action: cover.set_cover_position
+                target:
+                  entity_id: !input cover
+                data:
+                  position: !input rain_position
+              - event: s42_rollladen_status
+                event_data:
+                  cover: "{{ cover_entity }}"
+                  text: "Sturm vorbei → {{ rain_position | int }} % (Regenschutz)"
+              # Beschattungs-Status NICHT freigeben (sonst ginge ein Beschattungs-Ende
+              # verloren, das in die Zwischenzeit fällt), sondern zum Abgleich vormerken:
+              # Der nächste Tick fährt auf die Sollposition, ohne die Abweichung als
+              # manuellen Eingriff zu werten — oder beendet die Beschattung regulär
+              - if:
+                  - "{{ shading_status_helper is string and is_state(shading_status_helper, 'on') }}"
+                then:
+                  - action: scene.create
+                    data:
+                      scene_id: "{{ 'shading_resync_' ~ (cover_entity | slugify) }}"
+                      snapshot_entities:
+                        - "{{ cover_entity }}"
+          # Ab hier nur mit eingestellter Entwarnung
+          - condition: "{{ storm_release_delay | int(0) > 0 }}"
           - variables:
               release_night: "{{ night_mode_on }}"
               # Tagsüber = Nachtmodus aus, Sonne über dem Horizont und Morgens-Uhrzeit
@@ -3088,6 +3151,22 @@ actions:
                   - "{{ not block_active }}"
                 sequence:
                   - choose:
+                      # Regenschutz aktiv: Lüftungsposition höchstens bis zur Regenposition
+                      - conditions:
+                          - "{{ rain_hold }}"
+                        sequence:
+                          - action: cover.set_cover_position
+                            target:
+                              entity_id: !input cover
+                            data:
+                              position: >-
+                                {% set vent = tilted_position if (window_state == 'tilted' or treat_open_as_tilted)
+                                   else night_ventilation_position %}
+                                {{ [vent | int, rain_position | int] | min }}
+                          - event: s42_rollladen_status
+                            event_data:
+                              cover: "{{ cover_entity }}"
+                              text: "Sturm vorbei → {{ [(tilted_position if (window_state == 'tilted' or treat_open_as_tilted) else night_ventilation_position) | int, rain_position | int] | min }} % (Nachtmodus, Regen)"
                       - conditions:
                           - "{{ window_state == 'tilted' or (treat_open_as_tilted and window_state in ['on', 'open']) }}"
                         sequence:
@@ -3197,15 +3276,19 @@ actions:
             {% endfor %}
             {{ ns.all }}
         sequence:
-          # Beschattungs-Status freigeben: Während der Pause ist der Sollwert
-          # weitergewandert — ohne Freigabe würde der erste Tick die Abweichung
-          # als manuellen Eingriff werten und bis Tagesende nicht mehr beschatten
+          # Während der Pause ist der Sollwert weitergewandert.
+          # Beschattungs-Status NICHT freigeben (sonst ginge ein Beschattungs-Ende
+          # verloren, das in die Zwischenzeit fällt), sondern zum Abgleich vormerken:
+          # Der nächste Tick fährt auf die Sollposition, ohne die Abweichung als
+          # manuellen Eingriff zu werten — oder beendet die Beschattung regulär
           - if:
               - "{{ shading_status_helper is string and is_state(shading_status_helper, 'on') }}"
             then:
-              - action: input_boolean.turn_off
-                target:
-                  entity_id: "{{ shading_status_helper }}"
+              - action: scene.create
+                data:
+                  scene_id: "{{ 'shading_resync_' ~ (cover_entity | slugify) }}"
+                  snapshot_entities:
+                    - "{{ cover_entity }}"
           # Regenschutz nachholen: Regnet es bei gekipptem Fenster, nicht bis zum
           # nächsten Regenbeginn ungeschützt bleiben. Sturm hat Vorrang (außer im
           # Panzer-Modus, dort ist Herunterfahren ohnehin die Schutzrichtung)
@@ -3366,6 +3449,43 @@ actions:
           # nächste Tick neu (Status-Helfer wurde beim Öffnen freigegeben).
           # Läuft gerade eine Pause, sortiert das Gate oben diesen Lauf aus —
           # dann holt das Pause-Ende den Nachtmodus nach
+          # Regenschutz nachholen (wie beim Pause-Ende): rain_start feuert nur einmal und
+          # wurde evtl. durch Sturm, Notfall oder Hindernis ausgelassen
+          - if:
+              - "{{ rain_hold }}"
+              - "{{ not rain_storm_active or panzer_mode }}"
+              - "{{ state_attr(cover_entity, 'current_position') | int(-1) > rain_position }}"
+              - "{{ not block_active }}"
+            then:
+              - if:
+                  - "{{ rain_restore and expand(rain_scene) | count == 0 }}"
+                then:
+                  - action: scene.create
+                    data:
+                      scene_id: "{{ 'rain_' ~ (cover_entity | slugify) }}"
+                      snapshot_entities:
+                        - "{{ cover_entity }}"
+              - action: cover.set_cover_position
+                target:
+                  entity_id: !input cover
+                data:
+                  position: !input rain_position
+              - event: s42_rollladen_status
+                event_data:
+                  cover: "{{ cover_entity }}"
+                  text: "Notfall vorbei → {{ rain_position | int }} % (Regenschutz)"
+              # Beschattungs-Status NICHT freigeben (sonst ginge ein Beschattungs-Ende
+              # verloren, das in die Zwischenzeit fällt), sondern zum Abgleich vormerken:
+              # Der nächste Tick fährt auf die Sollposition, ohne die Abweichung als
+              # manuellen Eingriff zu werten — oder beendet die Beschattung regulär
+              - if:
+                  - "{{ shading_status_helper is string and is_state(shading_status_helper, 'on') }}"
+                then:
+                  - action: scene.create
+                    data:
+                      scene_id: "{{ 'shading_resync_' ~ (cover_entity | slugify) }}"
+                      snapshot_entities:
+                        - "{{ cover_entity }}"
           - variables:
               wind_now: >-
                 {% if storm_wind_sensor is string %}
@@ -3402,6 +3522,22 @@ actions:
                   - "{{ not block_active }}"
                 sequence:
                   - choose:
+                      # Regenschutz aktiv: Lüftungsposition höchstens bis zur Regenposition
+                      - conditions:
+                          - "{{ rain_hold }}"
+                        sequence:
+                          - action: cover.set_cover_position
+                            target:
+                              entity_id: !input cover
+                            data:
+                              position: >-
+                                {% set vent = tilted_position if (window_state == 'tilted' or treat_open_as_tilted)
+                                   else night_ventilation_position %}
+                                {{ [vent | int, rain_position | int] | min }}
+                          - event: s42_rollladen_status
+                            event_data:
+                              cover: "{{ cover_entity }}"
+                              text: "Notfall vorbei → {{ [(tilted_position if (window_state == 'tilted' or treat_open_as_tilted) else night_ventilation_position) | int, rain_position | int] | min }} % (Nachtmodus, Regen)"
                       - conditions:
                           - "{{ window_state == 'tilted' or (treat_open_as_tilted and window_state in ['on', 'open']) }}"
                         sequence:
@@ -3461,17 +3597,60 @@ actions:
           # (sonst erledigt das später dessen eigener Trigger)
           - "{{ not block_active }}"
         sequence:
-          # Beschattungs-Status freigeben: Während der Sperre wurde nicht
-          # nachgeführt — ohne Freigabe würde der erste Tick die Abweichung als
-          # manuellen Eingriff werten und bis Tagesende nicht mehr beschatten.
-          # In einer Pause übernimmt das das Pause-Ende.
+          # Während der Sperre wurde nicht nachgeführt. In einer Pause übernimmt
+          # das Pause-Ende den Abgleich und den Regenschutz.
           - if:
               - "{{ not pause_active }}"
-              - "{{ shading_status_helper is string and is_state(shading_status_helper, 'on') }}"
             then:
-              - action: input_boolean.turn_off
-                target:
-                  entity_id: "{{ shading_status_helper }}"
+              # Beschattungs-Status NICHT freigeben (sonst ginge ein Beschattungs-Ende
+              # verloren, das in die Zwischenzeit fällt), sondern zum Abgleich vormerken:
+              # Der nächste Tick fährt auf die Sollposition, ohne die Abweichung als
+              # manuellen Eingriff zu werten — oder beendet die Beschattung regulär
+              - if:
+                  - "{{ shading_status_helper is string and is_state(shading_status_helper, 'on') }}"
+                then:
+                  - action: scene.create
+                    data:
+                      scene_id: "{{ 'shading_resync_' ~ (cover_entity | slugify) }}"
+                      snapshot_entities:
+                        - "{{ cover_entity }}"
+              # Regenschutz nachholen (wie beim Pause-Ende): rain_start feuert nur einmal und
+              # wurde evtl. durch Sturm, Notfall oder Hindernis ausgelassen
+              - if:
+                  - "{{ rain_hold }}"
+                  - "{{ not rain_storm_active or panzer_mode }}"
+                  - "{{ state_attr(cover_entity, 'current_position') | int(-1) > rain_position }}"
+                  - "{{ not block_active }}"
+                then:
+                  - if:
+                      - "{{ rain_restore and expand(rain_scene) | count == 0 }}"
+                    then:
+                      - action: scene.create
+                        data:
+                          scene_id: "{{ 'rain_' ~ (cover_entity | slugify) }}"
+                          snapshot_entities:
+                            - "{{ cover_entity }}"
+                  - action: cover.set_cover_position
+                    target:
+                      entity_id: !input cover
+                    data:
+                      position: !input rain_position
+                  - event: s42_rollladen_status
+                    event_data:
+                      cover: "{{ cover_entity }}"
+                      text: "Hindernis frei → {{ rain_position | int }} % (Regenschutz)"
+                  # Beschattungs-Status NICHT freigeben (sonst ginge ein Beschattungs-Ende
+                  # verloren, das in die Zwischenzeit fällt), sondern zum Abgleich vormerken:
+                  # Der nächste Tick fährt auf die Sollposition, ohne die Abweichung als
+                  # manuellen Eingriff zu werten — oder beendet die Beschattung regulär
+                  - if:
+                      - "{{ shading_status_helper is string and is_state(shading_status_helper, 'on') }}"
+                    then:
+                      - action: scene.create
+                        data:
+                          scene_id: "{{ 'shading_resync_' ~ (cover_entity | slugify) }}"
+                          snapshot_entities:
+                            - "{{ cover_entity }}"
           - variables:
               wind_now: >-
                 {% if storm_wind_sensor is string %}
@@ -3507,6 +3686,22 @@ actions:
                   - "{{ night_mode_on }}"
                 sequence:
                   - choose:
+                      # Regenschutz aktiv: Lüftungsposition höchstens bis zur Regenposition
+                      - conditions:
+                          - "{{ rain_hold }}"
+                        sequence:
+                          - action: cover.set_cover_position
+                            target:
+                              entity_id: !input cover
+                            data:
+                              position: >-
+                                {% set vent = tilted_position if (window_state == 'tilted' or treat_open_as_tilted)
+                                   else night_ventilation_position %}
+                                {{ [vent | int, rain_position | int] | min }}
+                          - event: s42_rollladen_status
+                            event_data:
+                              cover: "{{ cover_entity }}"
+                              text: "Hindernis frei → {{ [(tilted_position if (window_state == 'tilted' or treat_open_as_tilted) else night_ventilation_position) | int, rain_position | int] | min }} % (Nachtmodus, Regen)"
                       - conditions:
                           - "{{ window_state == 'tilted' or (treat_open_as_tilted and window_state in ['on', 'open']) }}"
                         sequence:
@@ -3612,6 +3807,19 @@ actions:
                 {% endif %}
               # Fenster, Notfall und Hindernis-Sperre jetzt lesen (Laufbeginn ist 60 s her)
               win_now: "{{ (states(window_sensor) | lower) if window_sensor is string else 'closed' }}"
+              # Regen bei geschütztem Fenster — ohne die Regen-Verzögerung, denn der
+              # Neustart setzt deren Zeitstempel zurück (rain_start feuert danach nicht)
+              rain_hold_restart: >-
+                {{ rain_sensor is string and is_state(rain_sensor, 'on')
+                   and (win_now == 'tilted'
+                        or (win_now in ['on', 'open'] and (treat_open_as_tilted or rain_include_open))) }}
+              # Lüftungspositionen, bei Regen höchstens die Regenposition
+              vent_tilt: >-
+                {{ [tilted_position | int, rain_position | int] | min if rain_hold_restart
+                   else tilted_position | int }}
+              vent_open: >-
+                {{ [night_ventilation_position | int, rain_position | int] | min if rain_hold_restart
+                   else night_ventilation_position | int }}
               emergency_now: >-
                 {% set sensors = [emergency_sensors] if emergency_sensors is string else emergency_sensors %}
                 {{ sensors | select('is_state', 'on') | list | length > 0 }}
@@ -3633,6 +3841,29 @@ actions:
           - condition: "{{ not pause_now }}"
           - condition: "{{ not emergency_now }}"
           - condition: "{{ not storm_enabled or (wind_now | float(0)) < wind_speed_threshold }}"
+          # Regenschutz wiederherstellen (wie beim Pause-Ende)
+          - if:
+              - "{{ rain_hold_restart }}"
+              - "{{ state_attr(cover_entity, 'current_position') | int(-1) > rain_position }}"
+              - "{{ not block_now }}"
+            then:
+              - if:
+                  - "{{ rain_restore and expand(rain_scene) | count == 0 }}"
+                then:
+                  - action: scene.create
+                    data:
+                      scene_id: "{{ 'rain_' ~ (cover_entity | slugify) }}"
+                      snapshot_entities:
+                        - "{{ cover_entity }}"
+              - action: cover.set_cover_position
+                target:
+                  entity_id: !input cover
+                data:
+                  position: !input rain_position
+              - event: s42_rollladen_status
+                event_data:
+                  cover: "{{ cover_entity }}"
+                  text: "Nach Neustart → {{ rain_position | int }} % (Regenschutz)"
           - choose:
               # Morgens-Uhrzeit höchstens 2 Stunden her: Morgens-Öffnen nachholen —
               # auch bei noch aktivem Nachtmodus, genau wie der reguläre Morgens-Trigger.
@@ -3648,6 +3879,24 @@ actions:
                   - condition: >-
                       {{ not (shading_status_helper is string and is_state(shading_status_helper, 'on'))
                          and not (solar_heating_status_helper is string and is_state(solar_heating_status_helper, 'on')) }}
+                  # Regenschutz aktiv: nicht öffnen, sondern wie im Morgens-Zweig die
+                  # Morgen-Position fürs Regenende vormerken
+                  - if:
+                      - "{{ rain_hold_restart }}"
+                    then:
+                      - if:
+                          - "{{ rain_restore }}"
+                          - "{{ state_attr(cover_entity, 'current_position') | int(101) < morning_target }}"
+                        then:
+                          - action: scene.create
+                            data:
+                              scene_id: "{{ 'rain_' ~ (cover_entity | slugify) }}"
+                              entities: "{{ {cover_entity: {'state': 'open', 'current_position': morning_target | int}} }}"
+                      - event: s42_rollladen_status
+                        event_data:
+                          cover: "{{ cover_entity }}"
+                          text: "Nach Neustart: Morgens öffnen übersprungen (Regenschutz)"
+                      - stop: "Regenschutz aktiv — Morgens-Öffnen erst nach dem Regen"
                   - choose:
                       - conditions:
                           - "{{ state_attr(cover_entity, 'current_position') is not none }}"
@@ -3709,31 +3958,31 @@ actions:
                   - choose:
                       - conditions:
                           - "{{ win_now == 'tilted' or (treat_open_as_tilted and win_now in ['on', 'open']) }}"
-                          - "{{ state_attr(cover_entity, 'current_position') | int(101) < tilted_position }}"
+                          - "{{ state_attr(cover_entity, 'current_position') | int(101) < vent_tilt | int }}"
                         sequence:
                           - action: cover.set_cover_position
                             target:
                               entity_id: !input cover
                             data:
-                              position: !input tilted_position
+                              position: "{{ vent_tilt }}"
                           - event: s42_rollladen_status
                             event_data:
                               cover: "{{ cover_entity }}"
-                              text: "Nach Neustart → {{ tilted_position | int }} % (Nachtmodus, Fenster {{ 'gekippt' if win_now == 'tilted' else 'offen, wie gekippt' }})"
+                              text: "Nach Neustart → {{ vent_tilt }} % (Nachtmodus, Fenster {{ 'gekippt' if win_now == 'tilted' else 'offen, wie gekippt' }})"
                       - conditions:
                           - "{{ win_now in ['on', 'open'] }}"
                           - "{{ not treat_open_as_tilted }}"
-                          - "{{ state_attr(cover_entity, 'current_position') | int(101) < night_ventilation_position }}"
+                          - "{{ state_attr(cover_entity, 'current_position') | int(101) < vent_open | int }}"
                         sequence:
                           - action: cover.set_cover_position
                             target:
                               entity_id: !input cover
                             data:
-                              position: !input night_ventilation_position
+                              position: "{{ vent_open }}"
                           - event: s42_rollladen_status
                             event_data:
                               cover: "{{ cover_entity }}"
-                              text: "Nach Neustart → {{ night_ventilation_position | int }} % (Nachtmodus, Fenster offen)"
+                              text: "Nach Neustart → {{ vent_open }} % (Nachtmodus, Fenster offen)"
                       # Fenster zu: wie beim Einschalten des Nachtmodus ganz schließen
                       # oder nur abwärts auf die Nachtposition
                       - conditions:
@@ -4222,6 +4471,9 @@ actions:
                         {% endif %}
                         {{ [t, frost_max_position | int] | min if frost_active else t }}
                       deviation: "{{ (current_position - target_position | int) | abs }}"
+                      # Nach Pause, Hindernis oder Regen einmal auf die Sollposition
+                      # abgleichen (siehe shading_resync_marker)
+                      shading_resync: "{{ expand(shading_resync_marker) | count > 0 }}"
                       # Manueller Eingriff abgelaufen: Dauer gesetzt und der Rollladen
                       # steht seit mindestens so vielen Minuten still. Bewusst
                       # last_updated statt last_changed — viele Cover melden eine
@@ -4273,7 +4525,7 @@ actions:
                       # Der Mindestabstand bremst nur dieses Nachführen; Beginn und
                       # Ende der Beschattung laufen immer sofort.
                       - if:
-                          - "{{ deviation >= shading_min_change and (deviation <= shading_override_threshold or override_expired or target_switch) }}"
+                          - "{{ deviation >= shading_min_change and (deviation <= shading_override_threshold or override_expired or target_switch or shading_resync) }}"
                           - "{{ move_interval_ok }}"
                         then:
                           - action: cover.set_cover_position
@@ -4285,8 +4537,26 @@ actions:
                             event_data:
                               cover: "{{ cover_entity }}"
                               text: "{{ 'Blendschutz' if glare_enabled and target_position | int != heat_target | int else 'Beschattung' }} → {{ target_position | int }} %"
+                      # Abgleich erledigt (gefahren oder schon synchron) — bremst der
+                      # Mindestabstand, bleibt der Merker für den nächsten Tick
+                      - if:
+                          - "{{ shading_resync }}"
+                          - "{{ deviation < shading_min_change or move_interval_ok }}"
+                        then:
+                          - action: scene.delete
+                            continue_on_error: true
+                            target:
+                              entity_id: "{{ shading_resync_marker }}"
                     else:
-                      # Beschattung beginnt: Anfangsbewegung immer ausführen
+                      # Beschattung beginnt: Anfangsbewegung immer ausführen; ein alter
+                      # Abgleich-Merker ist damit hinfällig
+                      - if:
+                          - "{{ shading_resync }}"
+                        then:
+                          - action: scene.delete
+                            continue_on_error: true
+                            target:
+                              entity_id: "{{ shading_resync_marker }}"
                       - action: input_boolean.turn_on
                         target:
                           entity_id: "{{ shading_status_helper }}"
@@ -4319,6 +4589,13 @@ actions:
                   - action: input_boolean.turn_off
                     target:
                       entity_id: "{{ shading_status_helper }}"
+                  - if:
+                      - "{{ expand(shading_resync_marker) | count > 0 }}"
+                    then:
+                      - action: scene.delete
+                        continue_on_error: true
+                        target:
+                          entity_id: "{{ shading_resync_marker }}"
                   # Hindernis-Sperre: Das Ende fährt meist nach oben — liegt die
                   # End-Position tiefer als der Rollladen (oder ist dessen Position
                   # unbekannt), bleibt er während der Sperre stehen
@@ -4844,12 +5121,18 @@ actions:
                         event_data:
                           cover: "{{ cover_entity }}"
                           text: "Fenster {{ 'gekippt' if trigger.to_state.state | lower == 'tilted' else 'offen' }} → {{ rain_position | int }} % (Regen)"
+                      # Beschattungs-Status NICHT freigeben (sonst ginge ein Beschattungs-Ende
+                      # verloren, das in die Zwischenzeit fällt), sondern zum Abgleich vormerken:
+                      # Der nächste Tick fährt auf die Sollposition, ohne die Abweichung als
+                      # manuellen Eingriff zu werten — oder beendet die Beschattung regulär
                       - if:
                           - "{{ shading_status_helper is string and is_state(shading_status_helper, 'on') }}"
                         then:
-                          - action: input_boolean.turn_off
-                            target:
-                              entity_id: "{{ shading_status_helper }}"
+                          - action: scene.create
+                            data:
+                              scene_id: "{{ 'shading_resync_' ~ (cover_entity | slugify) }}"
+                              snapshot_entities:
+                                - "{{ cover_entity }}"
               - conditions:
                   - "{{ trigger.to_state.state | lower == 'tilted' or (treat_open_as_tilted and trigger.to_state.state | lower in ['on', 'open']) }}"
                   - "{{ state_attr(cover_entity, 'current_position') | int(101) < tilted_position }}"
@@ -5153,14 +5436,19 @@ actions:
             event_data:
               cover: "{{ cover_entity }}"
               text: "Regen → {{ rain_position | int }} % (Fenster {{ 'gekippt' if window_state == 'tilted' else 'offen' }})"
-          # Regenfahrt ist eine Fremdbewegung, kein manueller Eingriff:
-          # Beschattungs-Status freigeben
+          # Regenfahrt ist eine Fremdbewegung, kein manueller Eingriff.
+          # Beschattungs-Status NICHT freigeben (sonst ginge ein Beschattungs-Ende
+          # verloren, das in die Zwischenzeit fällt), sondern zum Abgleich vormerken:
+          # Der nächste Tick fährt auf die Sollposition, ohne die Abweichung als
+          # manuellen Eingriff zu werten — oder beendet die Beschattung regulär
           - if:
               - "{{ shading_status_helper is string and is_state(shading_status_helper, 'on') }}"
             then:
-              - action: input_boolean.turn_off
-                target:
-                  entity_id: "{{ shading_status_helper }}"
+              - action: scene.create
+                data:
+                  scene_id: "{{ 'shading_resync_' ~ (cover_entity | slugify) }}"
+                  snapshot_entities:
+                    - "{{ cover_entity }}"
 
       # --- REGENSCHUTZ: REGEN VORBEI → ZURÜCKFAHREN ---
       # Läuft auch während der Pause (Gate-Ausnahme), damit der Snapshot sicher
@@ -5171,13 +5459,17 @@ actions:
           - "{{ expand(rain_scene) | count > 0 }}"
         sequence:
           # Zustand jetzt bewerten: Fenster noch im geschützten Zustand, kein
-          # Nachtmodus, kein Sturm, keine Pause — sonst nur den Snapshot verwerfen
+          # Nachtmodus, kein Sturm, keine Pause, kein Notfall — sonst nur den
+          # Snapshot verwerfen. Der Beschattungs-Status bleibt an: Den Abgleich hat
+          # der Regenbeginn vorgemerkt (shading_resync_marker) — ist die Sonne
+          # inzwischen weg, beendet der nächste Tick die Beschattung regulär
           - if:
               - "{{ rain_restore }}"
               - "{{ rain_window_protected }}"
               - "{{ not night_mode_on }}"
               - "{{ not rain_storm_active }}"
               - "{{ not pause_active }}"
+              - "{{ not emergency_active }}"
             then:
               - action: scene.turn_on
                 target:
@@ -5186,13 +5478,6 @@ actions:
                 event_data:
                   cover: "{{ cover_entity }}"
                   text: "Regen vorbei → Position von vorher"
-              # Zurückfahren ist eine Fremdbewegung: Beschattungs-Status freigeben
-              - if:
-                  - "{{ shading_status_helper is string and is_state(shading_status_helper, 'on') }}"
-                then:
-                  - action: input_boolean.turn_off
-                    target:
-                      entity_id: "{{ shading_status_helper }}"
           # Der Regen ist vorbei: Snapshot in jedem Fall verwerfen, sonst würde der
           # nächste Regen ihn nicht neu anlegen (continue_on_error: paralleler Lauf
           # hat ihn evtl. schon gelöscht)
