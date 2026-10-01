@@ -23,7 +23,7 @@ blueprint:
   input:
     assignment_section:
       name: Zuordnung
-      description: Der Rollladen und der zugehörige Fenstersensor.
+      description: Der Rollladen und (optional) der zugehörige Fenstersensor.
       icon: mdi:vector-link
       input:
         cover:
@@ -33,7 +33,7 @@ blueprint:
             entity:
               domain: cover
         window_sensor:
-          name: Fenstersensor
+          name: Fenstersensor (optional)
           description: >
             Der Fensterkontakt zu diesem Rollladen. Unterstützt werden klassische
             binäre Fensterkontakte (offen/geschlossen) ebenso wie
@@ -41,6 +41,13 @@ blueprint:
             Kontakte erscheinen in der Auswahl nur mit passender Geräteklasse
             (Tür, Fenster, Öffnung oder Garagentor) — die lässt sich in den
             Einstellungen der Entität nachrüsten.
+            Leer lassen bei Festverglasung bzw. Fenstern, die sich nicht öffnen
+            lassen: Das Fenster gilt dann immer als geschlossen; Fenster-Interaktion
+            (Kippen/Öffnen/Zurückfahren), Benachrichtigungen und Moskito-Modus
+            entfallen. ⚠️ Nicht für Balkon- oder Terrassentüren ohne Kontakt —
+            Nachtmodus, Beschattung und Panzer-Modus fahren dann auch bei offener
+            Tür herunter (Aussperr-Gefahr!).
+          default: []
           selector:
             entity:
               filter:
@@ -90,7 +97,7 @@ blueprint:
               unit_of_measurement: "%"
     window_interaction_section:
       name: Fenster-Interaktion
-      description: Wie der Rollladen auf geöffnete oder gekippte Fenster reagiert.
+      description: Wie der Rollladen auf geöffnete oder gekippte Fenster reagiert. Benötigt einen Fenstersensor.
       icon: mdi:window-open-variant
       collapsed: true
       input:
@@ -562,6 +569,7 @@ blueprint:
       description: >
         Schaltet die Lichter im Raum aus, wenn das Fenster nach Einbruch der Dunkelheit
         geöffnet oder gekippt wird — damit das Licht keine Insekten anlockt.
+        Benötigt einen Fenstersensor.
       icon: mdi:bug
       collapsed: true
       input:
@@ -738,6 +746,7 @@ blueprint:
       description: >
         Benachrichtigungen bei zu lange offenem oder gekipptem Fenster. Wird das
         Fenster geschlossen, verschwindet die Meldung automatisch vom Gerät.
+        Benötigt einen Fenstersensor.
       icon: mdi:bell
       collapsed: true
       input:
@@ -792,8 +801,10 @@ variables:
   window_sensor: !input window_sensor
   # Fensterzustand in Kleinschreibung: manche Drei-Zustands-Sensoren (z.B. Senoro)
   # melden Open/Tilted/Closed. Wird zu Laufbeginn ausgewertet — nach einem Wait
-  # den Zustand direkt neu lesen
-  window_state: "{{ states(window_sensor) | lower }}"
+  # den Zustand direkt neu lesen. Ohne Fenstersensor (Festverglasung) gilt das
+  # Fenster immer als geschlossen — states() auf der leeren Liste würde sonst
+  # jeden Lauf abbrechen
+  window_state: "{{ (states(window_sensor) | lower) if window_sensor is string else 'closed' }}"
   tilted_position: !input tilted_position
   reclose_timeout: !input reclose_timeout
   force_close: !input force_close
@@ -850,8 +861,9 @@ variables:
   notification_timeout: !input notification_timeout
   notification_timeout_tilted: !input notification_timeout_tilted
   notification_device: !input notification_device
-  action_id: "{{ 'CLOSE_SHUTTER__' ~ window_sensor }}"
-  notification_tag: "{{ 'fenster_offen_' ~ (window_sensor | slugify) }}"
+  # Ohne Fenstersensor gibt es keine Meldungen — 'none' ist dann nur Platzhalter
+  action_id: "{{ 'CLOSE_SHUTTER__' ~ (window_sensor if window_sensor is string else 'none') }}"
+  notification_tag: "{{ 'fenster_offen_' ~ ((window_sensor if window_sensor is string else 'none') | slugify) }}"
   device_name_map: >
     {% set ns = namespace(device_names=[]) %}
     {% for device_id in notification_device %}
@@ -872,7 +884,8 @@ triggers:
     at: !input morning_time
     id: morning_open
     enabled: !input morning_enabled
-  # Großgeschriebene Varianten für Sensoren, die Open/Tilted/Closed melden
+  # Großgeschriebene Varianten für Sensoren, die Open/Tilted/Closed melden.
+  # Ohne Fenstersensor (leere Liste) feuern die Fenster-Trigger nie
   - trigger: state
     entity_id: !input window_sensor
     to:
@@ -941,7 +954,7 @@ triggers:
   - trigger: event
     event_type: mobile_app_notification_action
     event_data:
-      action: "CLOSE_SHUTTER__{{ window_sensor_tv }}"
+      action: "CLOSE_SHUTTER__{{ window_sensor_tv if window_sensor_tv is string else 'none' }}"
     id: close_shutter_action
   - trigger: time_pattern
     minutes: "/5"
@@ -1411,7 +1424,8 @@ actions:
           - variables:
               mosquito_area: >-
                 {{ mosquito_area_input if mosquito_area_input is string and mosquito_area_input
-                   else area_id(window_sensor) }}
+                   else area_id(window_sensor) if window_sensor is string
+                   else none }}
               lights_to_turn_off: >-
                 {% if mosquito_area %}
                   {{ expand(area_entities(mosquito_area))
@@ -1436,6 +1450,9 @@ actions:
               - window_tilted_long
           - "{{ not (sleep_mode_boolean is string and is_state(sleep_mode_boolean, 'on')) }}"
           - "{{ device_name_map | length > 0 }}"
+          # Ohne Fenstersensor feuern diese Trigger nie — reine Absicherung,
+          # denn Bereich/Name unten würden auf der leeren Liste abbrechen
+          - "{{ window_sensor is string }}"
         sequence:
           - variables:
               state_word: "{{ 'offen' if trigger.id == 'window_open_long' else 'gekippt' }}"

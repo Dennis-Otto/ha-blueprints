@@ -7,24 +7,27 @@
 ## Konzept
 
 **Eine Automation pro Fenster/Rollladen-Paar.** Du legst für jedes Fenster eine eigene
-Instanz aus diesem Blueprint an und wählst dort genau einen Rollladen und genau einen
-Fensterkontakt aus. Als Fensterkontakt funktionieren klassische binäre Sensoren
-(offen/geschlossen) genauso wie Drei-Zustands-Sensoren (offen/gekippt/geschlossen) —
-auch solche, die ihre Zustände großgeschrieben melden (`Open`/`Tilted`/`Closed`,
-z. B. Senoro). Gemeinsame Einstellungen — die Uhrzeit fürs
+Instanz aus diesem Blueprint an und wählst dort genau einen Rollladen und — sofern
+vorhanden — genau einen Fensterkontakt aus. Als Fensterkontakt funktionieren
+klassische binäre Sensoren (offen/geschlossen) genauso wie Drei-Zustands-Sensoren
+(offen/gekippt/geschlossen) — auch solche, die ihre Zustände großgeschrieben melden
+(`Open`/`Tilted`/`Closed`, z. B. Senoro). Gemeinsame Einstellungen — die Uhrzeit fürs
 morgendliche Öffnen, der Nachtmodus-Schalter, die Wetter-Entität — sind Helfer, die du
 einfach in allen Instanzen identisch auswählst.
 
 Warum so? Weil jedes Fenster eigene Eigenschaften hat (Ausrichtung, Größe, Balkontür
 oder nicht) und weil damit jede Instanz für sich verständlich, testbar und abschaltbar
-bleibt. Nur zwei Felder sind Pflicht: Rollladen und Fenstersensor. Jedes Feature
-darüber hinaus ist per Schalter zuschaltbar.
+bleibt. Pflicht ist nur der Rollladen. Der Fenstersensor gehört zu jedem Fenster,
+das sich öffnen lässt; bei Festverglasung bleibt das Feld leer, und das Fenster gilt
+als immer geschlossen (siehe FAQ). Jedes Feature darüber hinaus ist per Schalter
+zuschaltbar.
 
 ## Einrichtung
 
 1. **Blueprint importieren** (Button oben) und unter _Einstellungen → Automatisierungen
    & Szenen → Blueprints_ eine Instanz pro Fenster anlegen.
-2. **Rollladen + Fenstersensor** zuordnen — mehr braucht es für den Start nicht.
+2. **Rollladen + Fenstersensor** zuordnen — mehr braucht es für den Start nicht. Bei
+   Festverglasung ohne Kontakt bleibt der Fenstersensor leer.
 3. **Je nach gewünschten Features Helfer anlegen** (_Einstellungen → Geräte & Dienste →
    Helfer_):
    - Morgens öffnen: ein `input_datetime`-Helfer, **nur mit Uhrzeit, ohne Datum**
@@ -47,13 +50,13 @@ Fenster, bis der Helfer gesetzt oder das Feature deaktiviert ist.
 | Feature             | Was es tut                                                                                                                       | Voraussetzung                              |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
 | Morgens öffnen      | Fährt zur eingestellten Uhrzeit auf die Zielposition (nur wenn geschlossener)                                                    | `input_datetime`-Helfer (nur Uhrzeit)      |
-| Fenster-Interaktion | Kippen → Lüftungsposition, Öffnen → ganz auf (optional: wie Kippen behandeln); nach dem Schließen zurück in die Ausgangsposition | — (immer aktiv)                            |
+| Fenster-Interaktion | Kippen → Lüftungsposition, Öffnen → ganz auf (optional: wie Kippen behandeln); nach dem Schließen zurück in die Ausgangsposition | Fenstersensor (dann immer aktiv)           |
 | Nachtmodus          | Schließt beim Einschalten des Helfers; offene/gekippte Fenster bekommen eine Lüftungsposition                                    | `input_boolean`-Helfer                     |
 | Sturmschutz         | Fährt bei Starkwind hoch (oder im Panzer-Modus herunter)                                                                         | Wetter-Entität oder Wind-Sensor            |
 | Sonnenschutz        | Beschattet anhand des Sonnenstands so, dass die Sonne höchstens X m in den Raum fällt; öffnet nach Ende wieder                   | Status-Helfer, Geometrie, Temperaturquelle |
 | Sonnenheizen        | Öffnet im Winter vergessene Rollos, wenn Sonne ins Fenster scheint und es kalt ist                                               | eigener Status-Helfer, Geometrie           |
-| Moskito-Modus       | Schaltet beim Fensteröffnen nach Sonnenuntergang die Lichter im Raum aus (mit Ausnahmen)                                         | — (Bereich kommt vom Fenstersensor)        |
-| Benachrichtigungen  | Meldet zu lange offene/gekippte Fenster aufs Handy, mit "Rollladen schließen"-Button; verschwindet automatisch beim Schließen    | Companion-App-Geräte                       |
+| Moskito-Modus       | Schaltet beim Fensteröffnen nach Sonnenuntergang die Lichter im Raum aus (mit Ausnahmen)                                         | Fenstersensor (liefert auch den Bereich)   |
+| Benachrichtigungen  | Meldet zu lange offene/gekippte Fenster aufs Handy, mit "Rollladen schließen"-Button; verschwindet automatisch beim Schließen    | Fenstersensor, Companion-App-Geräte        |
 | Pausieren           | Hält die komplette Automation an, solange ein Helfer eingeschaltet ist — z.B. während Videoaufnahmen oder wenn Gäste schlafen    | `input_boolean`-Helfer (optional)          |
 
 **Prioritäten:** Der **Sturmschutz gewinnt immer** — bei Starkwind bewegen weder
@@ -174,6 +177,15 @@ gekippt?** Dafür gibt es in der Fenster-Interaktion den Schalter "Öffnen wie K
 behandeln": Jedes "offen" gilt dann als "gekippt" — der Rollladen fährt auf die
 Kipp-Position statt komplett auf, und die Beschattung läuft weiter, statt zu
 pausieren. Typischer Fall: das Badfenster mit einfachem binärem Kontakt.
+
+**Ich habe ein festes Fenster ohne Kontakt — geht das?** Ja — das Feld
+"Fenstersensor" einfach leer lassen; ein Dummy-Sensor ist nicht nötig. Das Fenster
+gilt dann als immer geschlossen: Morgens öffnen, Nachtmodus, Sturmschutz,
+Sonnenschutz und Sonnenheizen arbeiten ganz normal. Fenster-Interaktion
+(Kippen/Öffnen/Zurückfahren), Benachrichtigungen und Moskito-Modus entfallen, weil
+sie vom Fensterzustand leben. ⚠️ Bei Balkon- oder Terrassentüren ohne Kontakt fahren
+Nachtmodus, Beschattung und Panzer-Modus auch bei offener Tür herunter —
+Aussperr-Gefahr.
 
 **Kann ich die Automation zeitweise anhalten?** Ja — im Abschnitt "Pausieren" einen
 einen oder mehrere `input_boolean`-Helfer auswählen. Die Logik ist wählbar: "AN
