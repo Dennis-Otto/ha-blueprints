@@ -55,7 +55,7 @@ Fenster, bis der Helfer gesetzt oder das Feature deaktiviert ist.
 | Morgens öffnen      | Fährt zur eingestellten Uhrzeit auf die Zielposition (nur wenn geschlossener)                                                                                             | `input_datetime`-Helfer (nur Uhrzeit)      |
 | Fenster-Interaktion | Kippen → Lüftungsposition, Öffnen → ganz auf/Wunschposition (optional: wie Kippen); beim Schließen zurück; Reaktionszeit wählbar                                          | Fenstersensor (dann immer aktiv)           |
 | Nachtmodus          | Schließt beim Einschalten des Helfers oder zur eigenen Uhrzeit ganz oder auf eine Nachtposition; offene/gekippte Fenster bekommen bis zum Schließen eine Lüftungsposition | `input_boolean` oder Uhrzeit-Helfer        |
-| Sturmschutz         | Fährt bei Starkwind hoch (oder im Panzer-Modus herunter)                                                                                                                  | Wetter-Entität oder Wind-Sensor            |
+| Sturmschutz         | Fährt bei Starkwind hoch (oder im Panzer-Modus herunter); optional mit Auslöseverzögerung und Entwarnung nach dem Sturm                                                   | Wetter-Entität oder Wind-Sensor            |
 | Sonnenschutz        | Beschattet nach Sonnenstand, sodass die Sonne höchstens X m in den Raum fällt; öffnet danach wieder; optional nur bei Freigabe oder im Zeitfenster                        | Status-Helfer, Geometrie, Temperaturquelle |
 | Sonnenheizen        | Öffnet im Winter vergessene Rollos, wenn Sonne ins Fenster scheint und es kalt ist                                                                                        | eigener Status-Helfer, Geometrie           |
 | Frostschutz         | Öffnet bei Frost nur bis zu einer Maximalposition (z. B. 90 %), damit ein festgefrorener Panzer nicht reißt                                                               | Temperaturquelle wie beim Sonnenschutz     |
@@ -78,6 +78,10 @@ dann der Nachtmodus (nachts wird nicht beschattet, nicht geheizt und beim
 Fensteröffnen nur bis zur Lüftungsposition geöffnet), dann erst die Komfort-Features.
 Der **Frostschutz** ist keine eigene Fahrt, sondern eine Obergrenze für deren
 Öffnungsfahrten — den Sturmschutz und das Notfall-Öffnen begrenzt er bewusst nicht.
+
+Die optionale **Sturm-Entwarnung** gehört nicht zum Hardware-Schutz: Während einer
+Pause entfällt sie, und sie stellt nur den Zustand her, den Nachtmodus bzw.
+Morgens-Öffnen ohnehin vorgeben.
 
 ## Verhalten verstehen
 
@@ -375,6 +379,33 @@ Pause.
 "Unbekannt" ist bei einer Fliegengittertür kein Beweis für "zu", und ein ausgehakter
 Panzer ist teurer als ein Rollladen, der eine Nacht oben bleibt.
 
+### Sturmschutz: Auslöseverzögerung und Entwarnung
+
+Mit der **Auslöseverzögerung** muss der Wind eine einstellbare Zeit ununterbrochen über
+dem Grenzwert liegen, bevor der Sturmschutz den Rollladen bewegt — einzelne Böen lösen
+dann nicht mehr sofort aus. Morgens-Öffnen, Beschattung und Sonnenheizen setzen
+trotzdem sofort aus, solange der Wind über dem Grenzwert liegt.
+
+Die **Entwarnung** ist standardmäßig aus. Mit einer Zeit größer 0 stellt die
+Automation den Normalzustand her, sobald der Wind nach einem Sturm so lange
+ununterbrochen unter dem Grenzwert lag:
+
+- **Nachtmodus aktiv:** Der Nachtzustand wird nachgeholt — wie beim Ende einer Pause
+  je nach Fenster geschlossen, Kipp- oder Lüftungsposition.
+- **Tagsüber im Panzer-Modus:** Ein noch geschlossener Rollladen öffnet auf die
+  Zielposition für morgens (nur aufwärts; bei offenem Fenster nur mit "Aktion bei
+  Sturm erzwingen", wie beim Sturmschutz selbst). Hat ihn inzwischen die Beschattung
+  übernommen oder jemand von Hand bewegt, bleibt er, wo er ist.
+- **Tagsüber ohne Panzer-Modus:** Der Rollladen ist schon oben, es wird nichts gefahren.
+
+Den Beschattungs-Status hat schon der Sturmschutz freigegeben, der nächste Tick
+beschattet also bei Bedarf. "Tagsüber" heißt: Nachtmodus aus, Sonne über dem Horizont
+und die Uhrzeit fürs Morgens-Öffnen (falls eingerichtet) vorbei. Sonst bleibt der
+Rollladen in der Sturmposition, bis das nächste reguläre Ereignis ihn übernimmt.
+Entwarnt wird nur nach einem echten Unterschreiten des Grenzwerts — meldet die Quelle
+nach einem Neustart oder Aussetzer erstmals einen niedrigen Wert, ist das keine
+Entwarnung. Ist ein Wind-Sensor gesetzt, entscheidet nur er über die Entwarnung.
+
 ## Bekannte Grenzen
 
 - **Wind-Sensor kurz nicht verfügbar** zählt als "windstill". Bewusste Entscheidung:
@@ -395,7 +426,23 @@ Panzer ist teurer als ein Rollladen, der eine Nacht oben bleibt.
   (mindestens 10 °C). Ohne verfügbare Temperaturquelle greift der Frostschutz nicht.
 - **Windgeschwindigkeit** wird roh mit dem Grenzwert verglichen — liefert deine Quelle
   m/s statt km/h, muss der Grenzwert entsprechend gesetzt werden.
-- **Sturm-Ende:** Nach dem Sturm bleibt der Rollladen in der Schutzposition, bis das
+- **Auslöseverzögerung:** Ein Neustart oder Neuladen der Automationen während der
+  Wartezeit verwirft sie; der Sturmschutz löst dann erst beim nächsten Überschreiten
+  des Grenzwerts aus.
+- **Entwarnung ohne Sturmfahrt:** Die Entwarnung weiß nicht, ob der Sturmschutz den
+  Rollladen wirklich bewegt hat — sie folgt jedem Wert über dem Grenzwert, auch einer
+  einzelnen Böe, die wegen der Auslöseverzögerung gar keinen Sturmschutz ausgelöst hat.
+  Nachts stellt sie dann den Nachtzustand her, im Panzer-Modus öffnet sie tagsüber
+  jeden noch geschlossenen Rollladen, auch einen, der schon vor dem Sturm zu war.
+- **Entwarnung mit zwei Windquellen:** Sind Wind-Sensor und Wetter-Entität gesetzt,
+  kann der Sturmschutz über beide auslösen, die Entwarnung kommt aber nur vom
+  Wind-Sensor. Hat allein die Wetter-Entität den Sturm gemeldet, gibt es keine
+  Entwarnung.
+- **Sturm-Ende:** Ohne Entwarnung (Standard) bleibt der Rollladen nach dem Sturm in der
+  Schutzposition. Die Entwarnung entfällt außerdem, wenn währenddessen eine Pause läuft,
+  Home Assistant neu startet bzw. die Automationen neu geladen werden oder die
+  Windquelle zwischendurch kurz nicht verfügbar ist (dann ist kein echtes Unterschreiten
+  belegt). In all diesen Fällen bleibt der Rollladen in der Schutzposition, bis das
   nächste reguläre Ereignis (Nachtmodus, Morgens, Beschattung) ihn übernimmt.
 - **"Nur anwesend" holt nichts nach:** Kommt jemand erst nach Ablauf des Timeouts nach
   Hause, während das Fenster noch offen ist, gibt es keine nachträgliche Meldung — der
@@ -591,7 +638,8 @@ funktioniert wie der Wandtaster — bewusste Befehle werden nicht blockiert.
 Praktisch für Videoaufnahmen (konstantes Licht!), schlafende Gäste oder den
 Fensterputzer. Beim Ausschalten holt die Automation einen inzwischen aktiven
 Nachtmodus nach und bewertet die Beschattung neu; verpasste Einzelereignisse
-(morgendliches Öffnen, Zurückfahren nach dem Lüften) werden nicht nachgeholt.
+(morgendliches Öffnen, Zurückfahren nach dem Lüften, Sturm-Entwarnung) werden nicht
+nachgeholt.
 
 **Kann ich die Beschattung tageweise freigeben oder sperren?** Ja — im Abschnitt
 "Sonnenschutz" einen Freigabe-Helfer auswählen: ein `input_boolean`, einen
