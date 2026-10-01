@@ -23,6 +23,8 @@ Pro Fenster/Rollladen wird eine eigene Automation erstellt — gemeinsame Helfer
 - Frostschutz (öffnet bei Frost nur bis zu einer Maximalposition, z. B. 90 %)
 - Moskito-Modus (Licht aus im Raum, wenn das Fenster nach Sonnenuntergang geöffnet wird)
 - Actionable Notifications bei zu lange offenen/gekippten Fenstern
+- Abwesenheitsmodus (schließt, wenn alle weg sind — nur bei geschlossenem Fenster —,
+  öffnet beim Heimkommen tagsüber wieder; optional strengere Beschattung)
 
 Mindestversion: Home Assistant 2024.10.
 

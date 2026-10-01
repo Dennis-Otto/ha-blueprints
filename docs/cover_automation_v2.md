@@ -40,6 +40,9 @@ zuschaltbar.
      Namensvorschlag: "Beschattung <Fenstername>".
    - Sonnenheizen: ein **weiterer** `input_boolean` pro Fenster (nicht denselben wie
      für den Sonnenschutz verwenden!).
+   - Abwesenheit: kein eigener Helfer nötig — Personen, Geräte-Tracker, eine
+     Personen-Gruppe oder ein vorhandener Anwesenheits-Helfer genügen. In allen
+     Instanzen dieselben auswählen.
 4. Für Sonnenschutz/Sonnenheizen die **Fenstergeometrie** eintragen (Ausrichtung in
    Grad, Sichtfeld, Fensterhöhe, Brüstungshöhe; bei Vordach oder Balkon darüber die
    maximale Sonnenhöhe) — Details unten.
@@ -66,6 +69,7 @@ Fenster, bis der Helfer gesetzt oder das Feature deaktiviert ist.
 | Notfall-Öffnen      | Fährt bei Rauch-/CO-Alarm oder Hagelwarnung sofort ganz auf und hält den Rollladen oben, bis alle Sensoren wieder aus sind                                                | `binary_sensor`/`input_boolean` (optional) |
 | Hindernis-Sperre    | Fährt nicht nach unten, solange ein Sperr-Sensor an ist (z.B. Fliegengittertür offen, jemand auf der Terrasse); mit Wartezeit                                             | Kontakt-/Präsenzsensor (optional)          |
 | Nach Neustart       | Holt nach einem HA-Neustart ein verpasstes Morgens-Öffnen (bis 2 h danach) nach bzw. stellt einen aktiven Nachtmodus wieder her                                           | — (Schalter, standardmäßig aus)            |
+| Abwesenheit         | Schließt, wenn alle weg sind (nur bei geschlossenem Fenster); öffnet beim Heimkommen tagsüber; optional strenger beschatten                                               | Personen, Tracker o. Ä. (Anwesenheit)      |
 
 **Prioritäten:** Ganz oben steht das **Notfall-Öffnen** — meldet ein Notfall-Sensor
 Alarm, fährt der Rollladen hoch und bleibt oben, egal was Sturmschutz, Pause oder
@@ -84,6 +88,9 @@ Der **Frostschutz** ist keine eigene Fahrt, sondern eine Obergrenze für deren
 Die optionale **Sturm-Entwarnung** gehört nicht zum Hardware-Schutz: Während einer
 Pause entfällt sie, und sie stellt nur den Zustand her, den Nachtmodus bzw.
 Morgens-Öffnen ohnehin vorgeben.
+Die Abwesenheit reiht sich dort ein: Sturm und Pause gehen vor, ein offenes Fenster
+verhindert das Schließen, und ein bei Abwesenheit unten stehender Rollladen wird von
+Sonnenschutz und Sonnenheizen nicht wieder geöffnet.
 
 ## Verhalten verstehen
 
@@ -224,9 +231,9 @@ kommt oder der Freigabe-Helfer geht aus). Das Episoden-Ende
 öffnet den Rollladen dann regulär — auch über die manuelle Position hinweg. Am
 nächsten Tag beginnt alles bei null; die Anfangsbewegung ist von der Toleranz
 ausgenommen. Stellst du den Rollladen manuell ungefähr dorthin, wo die Beschattung
-ihn haben will, übernimmt das Nachführen wieder stillschweigend. Sturm, Lüften und
-Morgens-Öffnen zählen dagegen nicht als manuelle Eingriffe — nach ihnen darf sofort
-wieder beschattet werden.
+ihn haben will, übernimmt das Nachführen wieder stillschweigend. Sturm, Lüften,
+Morgens-Öffnen sowie Schließen und Wiederöffnen durch die Abwesenheit zählen dagegen
+nicht als manuelle Eingriffe — nach ihnen darf sofort wieder beschattet werden.
 
 Soll ein Handgriff nicht die ganze Episode lang gelten, begrenzt die **Dauer für
 manuelle Eingriffe** die Sperre zeitlich (z. B. 60 Minuten): Steht der Rollladen
@@ -344,6 +351,56 @@ Sonnenschutz und Sonnenheizen dort entweder aus lassen oder mit eigenen
 Status-Helfern betreiben. Den Sturmschutz in beiden gleich einstellen — er greift
 auch in der pausierten Instanz. Den Urlaub-Helfer schaltest du selbst oder per
 Automation (z. B. wenn morgens niemand zu Hause ist).
+
+### Abwesenheit & Urlaub
+
+Im Abschnitt "Abwesenheit" wählst du aus, woran die Automation erkennt, ob jemand
+zuhause ist: Personen, Geräte-Tracker, eine Personen-Gruppe, die Zone "Zuhause"
+(zählt die Personen darin) oder einen eigenen Helfer bzw. Binärsensor wie "Jemand
+zuhause". **Abwesend** ist das Haus erst, wenn _alle_ ausgewählten Entitäten "weg"
+melden — und zwar ununterbrochen für die Wartezeit (Standard 10 Minuten). Ein
+Zonenwechsel unterwegs ("Arbeit" → unterwegs) startet die Wartezeit nicht neu. Eine
+nicht verfügbare oder unbekannte Entität zählt als anwesend: lieber einmal nicht
+schließen, als dass der Rollladen wegen eines Tracker-Aussetzers fährt.
+
+Was dann passiert, ist einzeln zuschaltbar:
+
+- **Bei Abwesenheit schließen:** Der Rollladen fährt einmal auf die
+  Abwesenheits-Position (Standard 0 %) — nur abwärts und nur, wenn das Fenster sicher
+  geschlossen ist. Ein offenes oder gekipptes Fenster bzw. eine offene Balkontür
+  verhindert das Schließen (Aussperr-Schutz: vielleicht steht doch jemand ohne Handy
+  draußen). Bei Sturm hat der Sturmschutz Vorrang, während einer Pause passiert
+  nichts. Solange niemand da ist und der Rollladen auf oder unter der
+  Abwesenheits-Position steht, öffnen ihn auch Sonnenschutz und Sonnenheizen nicht.
+- **Heimkommen:** Sobald wieder jemand sicher zuhause ist, öffnet der Rollladen auf
+  die Zielposition für morgens — aber nur, wenn er noch auf oder unter der
+  Abwesenheits-Position steht, der Nachtmodus aus ist, die Sonne über dem Horizont
+  steht und kein Sturm herrscht. Abends und nachts bleibt er also zu. Die Beschattung
+  bewertet danach der nächste Durchlauf neu. Wieder geöffnet wird nur nach einer
+  echten Abwesenheit (Wartezeit abgelaufen) — kurz zum Briefkasten und zurück bewegt
+  nichts. Maßgeblich ist die Position, nicht wer ihn heruntergefahren hat: Auch ein
+  schon vor dem Verlassen von Hand geschlossener Rollladen öffnet beim Heimkommen.
+  Wer das für ein Fenster nicht möchte, lässt dort "Bei Abwesenheit schließen" aus —
+  das Wiederöffnen gehört zu diesem Schalter.
+- **Strenger beschatten:** Während der Abwesenheit gilt für den Sonnenschutz eine
+  eigene, kleinere maximale Sonneneinfall-Tiefe (Standard 0,3 m) — mehr Hitzeschutz,
+  wenn ein dunklerer Raum niemanden stört. Der Wechsel beim Verlassen und beim
+  Heimkommen zählt nicht als manueller Eingriff. Steht der Rollladen bei Abwesenheit
+  ohnehin unten, gibt es nichts zu beschatten; spürbar wird die strenge Tiefe, wenn
+  das Schließen aus ist oder der Rollladen inzwischen wieder offen ist (z. B. nach
+  dem morgendlichen Öffnen im Urlaub).
+
+**Urlaub:** Geschlossen wird einmal beim Verlassen. Morgens-Öffnen und Nachtmodus
+laufen während der Abwesenheit normal weiter — die Rollläden fahren also auch im
+Urlaub morgens hoch und abends herunter, statt tagelang unten zu bleiben, und das Haus
+wirkt bewohnt. Einen eingebauten Zufallsversatz der Fahrzeiten gibt es nicht; wer
+ihn möchte, kann die gemeinsamen Helfer (Uhrzeit für morgens, Nachtmodus) während
+des Urlaubs mit einer eigenen Automation zu leicht wechselnden Zeiten schalten.
+
+Damit das Heimkommen nur nach einer echten Abwesenheit öffnet, merkt sich die
+Automation die laufende Abwesenheit in einer temporären Szene
+`scene.away_<rollladen>`. Sie wird beim Heimkommen automatisch wieder entfernt und
+sollte nicht von Hand gelöscht oder aktiviert werden.
 
 ### Warum die Status-Helfer nötig sind
 
@@ -698,6 +755,25 @@ Beschattung und Sonnenheizen brauchen kein Nachholen: Ihre 5-Minuten-Durchläufe
   Rollladen nach 60 Sekunden noch nicht verfügbar, unterbleibt das Nachholen; ohne
   verfügbaren Fensterkontakt wird der Nachtzustand nicht hergestellt. Einen zweiten
   Versuch gibt es nicht. Ein bloßes Neuladen der Automationen zählt nicht als Neustart.
+- **Abwesenheit — HA-Neustart während der Wartezeit:** Die laufende Wartezeit geht
+  verloren. Sind nach dem Neustart weiterhin alle weg, kann das Schließen für diesen
+  Weggang entfallen — der Rollladen bleibt dann, wie er ist.
+- **Abwesenheit — HA-Neustart während der Abwesenheit:** Der Merker (temporäre
+  Szene) ist danach weg — vermutlich auch nach einem Neuladen der Szenen, wie es
+  beim Speichern einer Szene im Editor passiert. Beim Heimkommen wird dann nicht
+  wieder geöffnet, und die strenge Beschattung fällt bis zur nächsten Abwesenheit
+  auf die normale Tiefe zurück. Dass Sonnenschutz und Sonnenheizen einen unten
+  stehenden Rollladen nicht öffnen, solange niemand da ist, gilt weiterhin.
+- **Abwesenheit — einmaliges Schließen:** Wird der Rollladen während der Abwesenheit
+  wieder geöffnet (von Hand, per App oder durch das Morgens-Öffnen), schließt die
+  Abwesenheit ihn nicht erneut.
+- **Abwesenheit und Pause:** Beginnt die Abwesenheit während einer Pause, wird das
+  Schließen nicht nachgeholt, und die strenge Beschattung entfällt für diese
+  Abwesenheit. Kommt jemand während einer Pause heim, wird nicht wieder geöffnet —
+  auch nicht nach dem Ende der Pause.
+- **Anwesenheits-Entität nicht verfügbar oder unbekannt:** zählt als anwesend — eine
+  Person ohne Tracker (dauerhaft "unbekannt") verhindert die Abwesenheit also
+  komplett. Nur Personen und Geräte auswählen, die ihren Standort wirklich melden.
 
 ## FAQ
 
@@ -830,8 +906,8 @@ funktioniert wie der Wandtaster — bewusste Befehle werden nicht blockiert.
 Praktisch für Videoaufnahmen (konstantes Licht!), schlafende Gäste oder den
 Fensterputzer. Beim Ausschalten holt die Automation einen inzwischen aktiven
 Nachtmodus nach und bewertet die Beschattung neu; verpasste Einzelereignisse
-(morgendliches Öffnen, Zurückfahren nach dem Lüften, Sturm-Entwarnung) werden nicht
-nachgeholt.
+(morgendliches Öffnen, Zurückfahren nach dem Lüften, Sturm-Entwarnung, Schließen bei
+Abwesenheit, Wiederöffnen beim Heimkommen) werden nicht nachgeholt.
 
 **Kann ich die Beschattung tageweise freigeben oder sperren?** Ja — im Abschnitt
 "Sonnenschutz" einen Freigabe-Helfer auswählen: ein `input_boolean`, einen
@@ -849,3 +925,18 @@ Beschattung — Fenster-Interaktion, Nachtmodus, Sturmschutz, Sonnenheizen und
 Benachrichtigungen laufen normal weiter. Und anders als der Status-Helfer darf ein
 Freigabe-Helfer in mehreren Instanzen gemeinsam genutzt werden (z. B. einer pro
 Fassade).
+
+**Gibt es einen Urlaubsmodus?** Ja, über den Abschnitt "Abwesenheit": Personen bzw.
+Tracker auswählen und "Bei Abwesenheit schließen" aktivieren. Beim Verlassen schließt
+der Rollladen, Morgens-Öffnen und Nachtmodus laufen im Urlaub normal weiter (siehe
+[Abwesenheit & Urlaub](#abwesenheit--urlaub)). Ein Helfer oder Binärsensor zählt als
+anwesend, wenn er "an" ist — ein "Urlaub"-Schalter (an = weg) passt also nicht
+direkt; dafür einen "Jemand zuhause"-Helfer verwenden oder den Schalter über einen
+Template-Binärsensor umdrehen.
+
+**Alle sind weg, aber der Rollladen schließt nicht — warum?** Prüfe in dieser
+Reihenfolge: Meldet wirklich jede ausgewählte Entität "weg" (eine Person ohne
+Tracker steht dauerhaft auf "unbekannt" und zählt als anwesend)? Ist die Wartezeit
+abgelaufen? Ist das Fenster offen oder gekippt (Aussperr-Schutz)? Herrscht Sturm,
+ist die Automation pausiert, oder steht der Rollladen schon auf bzw. unter der
+Abwesenheits-Position?
