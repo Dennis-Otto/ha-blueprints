@@ -733,6 +733,62 @@ blueprint:
                   label: Helfer AN = Automatik pausiert (z.B. "Aufnahme läuft")
                 - value: off_pauses
                   label: Helfer AUS = Automatik pausiert (z.B. "Rollladensteuerung aktiv")
+    block_section:
+      name: Hindernis-Sperre
+      description: >
+        Verhindert, dass die Automatik den Rollladen herunterfährt, solange etwas
+        im Weg ist — z.B. eine offene Fliegengittertür (der Panzer liefe sonst
+        auf und hakte im Kasten aus) oder jemand, der auf der Terrasse sitzt.
+        Fahrten nach oben (morgens öffnen, Fenster öffnen/kippen, Sonnenheizen,
+        Sturm ohne Panzer-Modus, Beschattungs-Ende nach oben) laufen normal
+        weiter. Wandtaster und andere Automationen werden nicht gesperrt, und
+        eine bereits laufende Fahrt wird nicht gestoppt.
+      icon: mdi:hand-back-left
+      collapsed: true
+      input:
+        block_sensors:
+          name: Sperr-Sensoren (optional)
+          description: >
+            Ein oder mehrere binäre Sensoren oder input_boolean-Helfer, z.B. der
+            Kontakt der Fliegengittertür oder ein Präsenzmelder auf der Terrasse.
+            Solange einer davon an ist (Tür offen, Person erkannt), fährt die
+            Automatik den Rollladen nicht nach unten: kein Nachtmodus (auch keine
+            Lüftungs- oder Kipp-Position), keine Beschattung (auch kein
+            Beschattungs-Ende auf eine tiefere Position), kein "Schließen
+            erzwingen", kein Zurückfahren nach dem Lüften und kein Schließen im
+            Panzer-Modus bei Sturm. Auch der "Rollladen schließen"-Knopf einer
+            Benachrichtigung wird gesperrt — Sicherheit vor Komfort. Ist die
+            Sperre aufgehoben, wird ein eingeschalteter Nachtmodus hergestellt
+            und die Beschattung neu bewertet; bei anhaltendem Sturm hat der
+            Sturmschutz Vorrang (im Panzer-Modus wird dann geschlossen). Das
+            Zurückfahren nach dem Lüften wird nicht nachgeholt.
+            ⚠️ Auch ein nicht verfügbarer oder unbekannter Sensor (z.B. leere
+            Batterie) sperrt — "unbekannt" ist kein Beweis für "zu". Ein dauerhaft
+            toter Sensor verhindert also dauerhaft jedes automatische Herunterfahren.
+            Leer lassen = keine Sperre (bisheriges Verhalten).
+          default: []
+          selector:
+            entity:
+              multiple: true
+              filter:
+                - domain: binary_sensor
+                - domain: input_boolean
+        block_release_delay:
+          name: Wartezeit bis zur Freigabe
+          description: >
+            Die Sperre gilt erst als aufgehoben, wenn ALLE Sperr-Sensoren
+            mindestens so lange aus sind — z.B. damit der Rollladen nicht sofort
+            herunterfährt, wenn der Präsenzmelder auf der Terrasse kurz "frei"
+            meldet, obwohl noch jemand draußen sitzt. 0 = Freigabe sofort beim
+            Ausschalten.
+          default: 0
+          selector:
+            number:
+              min: 0
+              max: 60
+              step: 1
+              mode: slider
+              unit_of_measurement: Minuten
     notification_section:
       name: Benachrichtigungen
       description: >
@@ -841,6 +897,23 @@ variables:
     {{ helpers | length > 0
        and found | length > 0
        and found | rejectattr('state', 'eq', pausing) | list | length == 0 }}
+  block_sensors: !input block_sensors
+  block_release_delay: !input block_release_delay
+  # Hindernis-Sperre: gesperrt, solange ein Sensor nicht eindeutig 'off' meldet
+  # (unavailable/unknown/nicht existent zählen als Hindernis — "unbekannt" ist
+  # kein Beweis für "zu") oder der zuletzt ausgeschaltete noch in der Wartezeit
+  # steckt. 2 s Toleranz, damit sich der Freigabe-Trigger (for: = Wartezeit)
+  # nicht wegen Timer-Jitter selbst noch als gesperrt sieht.
+  block_active: >-
+    {% set sensors = [block_sensors] if block_sensors is string else block_sensors %}
+    {% set ns = namespace(blocked = false) %}
+    {% for s in sensors %}
+      {% if states(s) != 'off'
+            or as_timestamp(now()) - as_timestamp(states[s].last_changed) < (block_release_delay | float(0)) * 60 - 2 %}
+        {% set ns.blocked = true %}
+      {% endif %}
+    {% endfor %}
+    {{ ns.blocked }}
   sleep_mode_boolean: !input sleep_mode_boolean
   use_area_name: !input use_area_name
   notification_timeout: !input notification_timeout
@@ -912,6 +985,15 @@ triggers:
     from: "off"
     to: "on"
     id: pause_ended
+  # Hindernis-Sperre aufgehoben: feuert pro Sensor, der die Wartezeit lang aus
+  # ist — ob wirklich ALLE frei sind, prüft der Zweig. Ohne from:, damit auch
+  # unavailable/unknown → aus (gilt als Hindernis) die Sperre beenden kann
+  - trigger: state
+    entity_id: !input block_sensors
+    to: "off"
+    for:
+      minutes: !input block_release_delay
+    id: block_released
   - trigger: state
     entity_id: !input night_mode_boolean
     to: "on"
@@ -952,11 +1034,12 @@ triggers:
     enabled: !input mosquito_enabled
 
 actions:
-  # Pausier-Helfer: hält die AUTOMATIK an, mit drei Ausnahmen — Sturmschutz
-  # (Hardware-Schutz geht vor), Benachrichtigungs-Aufräumen (bewegt nichts) und
-  # der Notification-Knopf (ein bewusster Nutzer-Befehl, wie der Wandtaster)
+  # Pausier-Helfer: hält die AUTOMATIK an, mit vier Ausnahmen — Sturmschutz
+  # (Hardware-Schutz geht vor), Benachrichtigungs-Aufräumen (bewegt nichts),
+  # der Notification-Knopf (ein bewusster Nutzer-Befehl, wie der Wandtaster) und
+  # das Ende der Hindernis-Sperre (holt in der Pause nur das Panzer-Schließen nach)
   - condition: >-
-      {{ trigger.id | default('') in ['storm_detected', 'window_closed', 'close_shutter_action']
+      {{ trigger.id | default('') in ['storm_detected', 'window_closed', 'close_shutter_action', 'block_released']
          or not pause_active }}
   - choose:
       # --- MORGENS ÖFFNEN ---
@@ -1023,6 +1106,9 @@ actions:
               - action: input_boolean.turn_off
                 target:
                   entity_id: "{{ solar_heating_status_helper }}"
+          # Hindernis-Sperre: Status-Helfer oben trotzdem zurücksetzen (die Nacht
+          # beendet die Episoden), aber nicht fahren — die Freigabe holt das nach
+          - condition: "{{ not block_active }}"
           - choose:
               - conditions:
                   - "{{ states(window_sensor) == 'tilted' or (treat_open_as_tilted and states(window_sensor) in ['on', 'open']) }}"
@@ -1067,6 +1153,9 @@ actions:
                 target:
                   entity_id: !input cover
             else:
+              # Hindernis-Sperre geht auch dem Panzer-Modus vor: Ein aufgelaufener,
+              # ausgehakter Panzer schützt vor nichts mehr — die Freigabe holt es nach
+              - condition: "{{ not block_active }}"
               - action: cover.close_cover
                 target:
                   entity_id: !input cover
@@ -1111,6 +1200,8 @@ actions:
           - if:
               - "{{ night_mode_boolean is string and is_state(night_mode_boolean, 'on') }}"
               - "{{ not storm_enabled or (wind_now | float(0)) < wind_speed_threshold }}"
+              # Bei Hindernis nicht nachholen — das übernimmt dann die Freigabe
+              - "{{ not block_active }}"
             then:
               - choose:
                   - conditions:
@@ -1133,6 +1224,78 @@ actions:
                   - action: cover.close_cover
                     target:
                       entity_id: !input cover
+
+      # --- HINDERNIS-SPERRE AUFGEHOBEN: ZUSTAND NACHHOLEN ---
+      - conditions:
+          - condition: trigger
+            id: block_released
+          # Der Trigger feuert pro Sensor — nur nachholen, wenn wirklich ALLE frei
+          # sind und auch der zuletzt ausgeschaltete die Wartezeit hinter sich hat
+          # (sonst erledigt das später dessen eigener Trigger)
+          - "{{ not block_active }}"
+        sequence:
+          # Beschattungs-Status freigeben: Während der Sperre wurde nicht
+          # nachgeführt — ohne Freigabe würde der erste Tick die Abweichung als
+          # manuellen Eingriff werten und bis Tagesende nicht mehr beschatten.
+          # In einer Pause übernimmt das das Pause-Ende.
+          - if:
+              - "{{ not pause_active }}"
+              - "{{ shading_status_helper is string and is_state(shading_status_helper, 'on') }}"
+            then:
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: "{{ shading_status_helper }}"
+          - variables:
+              wind_now: >-
+                {% if storm_wind_sensor is string %}
+                  {{ states(storm_wind_sensor) | float(0) }}
+                {% elif weather_entity is string %}
+                  {{ state_attr(weather_entity, 'wind_speed') | float(0) }}
+                {% else %}
+                  0
+                {% endif %}
+          - choose:
+              # Sturm hat Vorrang vor dem Nachtmodus. Im Panzer-Modus das gesperrte
+              # Schließen nachholen (gleiche Fenster-Regel wie beim Sturmschutz,
+              # auch in der Pause) — der Sturm-Trigger feuert erst beim nächsten
+              # Überschreiten wieder
+              - conditions:
+                  - "{{ storm_enabled and (wind_now | float(0)) >= wind_speed_threshold }}"
+                sequence:
+                  - if:
+                      - "{{ panzer_mode }}"
+                      - "{{ force_storm_action or states(window_sensor) in ['off', 'closed'] }}"
+                    then:
+                      - action: cover.close_cover
+                        target:
+                          entity_id: !input cover
+              # Verpassten Nachtmodus nachholen (fensterabhängig wie beim Pause-Ende);
+              # in einer Pause holt ihn stattdessen das Pause-Ende nach
+              - conditions:
+                  - "{{ not pause_active }}"
+                  - "{{ night_mode_boolean is string and is_state(night_mode_boolean, 'on') }}"
+                sequence:
+                  - choose:
+                      - conditions:
+                          - "{{ states(window_sensor) == 'tilted' or (treat_open_as_tilted and states(window_sensor) in ['on', 'open']) }}"
+                        sequence:
+                          - action: cover.set_cover_position
+                            target:
+                              entity_id: !input cover
+                            data:
+                              position: !input tilted_position
+                      - conditions:
+                          - "{{ states(window_sensor) in ['on', 'open'] }}"
+                        sequence:
+                          - action: cover.set_cover_position
+                            target:
+                              entity_id: !input cover
+                            data:
+                              position: !input night_ventilation_position
+                    default:
+                      - action: cover.close_cover
+                        target:
+                          entity_id: !input cover
 
       # --- SONNENSCHUTZ ---
       - conditions:
@@ -1221,6 +1384,8 @@ actions:
                   - "{{ weather_ok }}"
                   - "{{ not (night_mode_boolean is string and is_state(night_mode_boolean, 'on')) }}"
                   - "{{ force_shading or treat_open_as_tilted or states(window_sensor) not in ['on', 'open'] }}"
+                  # Hindernis-Sperre: weder beginnen noch nachführen (Beenden bleibt erlaubt)
+                  - "{{ not block_active }}"
                 sequence:
                   - variables:
                       # Höhe (über dem Boden), auf der ein Sonnenstrahl die Fensterebene
@@ -1285,6 +1450,12 @@ actions:
                   - action: input_boolean.turn_off
                     target:
                       entity_id: "{{ shading_status_helper }}"
+                  # Hindernis-Sperre: Das Ende fährt meist nach oben — liegt die
+                  # End-Position tiefer als der Rollladen (oder ist dessen Position
+                  # unbekannt), bleibt er während der Sperre stehen
+                  - condition: >-
+                      {{ not block_active
+                         or state_attr(cover_entity, 'current_position') | int(101) <= shading_end_position }}
                   - action: cover.set_cover_position
                     target:
                       entity_id: !input cover
@@ -1485,6 +1656,9 @@ actions:
           - condition: trigger
             id: close_shutter_action
           - "{{ trigger.event.data.action == action_id }}"
+          # Anders als die Pause sperrt das Hindernis auch den bewussten Befehl —
+          # vom Handy aus ist die offene Fliegengittertür nicht zu sehen
+          - "{{ not block_active }}"
         sequence:
           - action: cover.close_cover
             target:
@@ -1578,6 +1752,17 @@ actions:
                 {{ helpers | length > 0
                    and found | length > 0
                    and found | rejectattr('state', 'eq', pausing) | list | length == 0 }}
+              # Hindernis-Sperre neu bewerten (gleiche Logik wie block_active)
+              block_now: >-
+                {% set sensors = [block_sensors] if block_sensors is string else block_sensors %}
+                {% set ns = namespace(blocked = false) %}
+                {% for s in sensors %}
+                  {% if states(s) != 'off'
+                        or as_timestamp(now()) - as_timestamp(states[s].last_changed) < (block_release_delay | float(0)) * 60 - 2 %}
+                    {% set ns.blocked = true %}
+                  {% endif %}
+                {% endfor %}
+                {{ ns.blocked }}
               wind_now: >-
                 {% if storm_wind_sensor is string %}
                   {{ states(storm_wind_sensor) | float(0) }}
@@ -1594,6 +1779,7 @@ actions:
                   - "{{ force_close }}"
                   # Während der Pause wird auch nach Timeout nichts bewegt
                   - "{{ not pause_now }}"
+                  - "{{ not block_now }}"
                 then:
                   - action: cover.close_cover
                     target:
@@ -1604,6 +1790,7 @@ actions:
                   - conditions:
                       - "{{ night_mode_on_now }}"
                       - "{{ not pause_now }}"
+                      - "{{ not block_now }}"
                     sequence:
                       - action: cover.close_cover
                         target:
@@ -1617,6 +1804,9 @@ actions:
                   - conditions:
                       - "{{ not storm_now }}"
                       - "{{ not pause_now }}"
+                      # Hindernis-Sperre: Das Ziel des Snapshots ist unbekannt, und
+                      # nach dem Lüften geht es praktisch immer nach unten → auslassen
+                      - "{{ not block_now }}"
                       - "{{ expand(reclose_scene) | count > 0 }}"
                     sequence:
                       - action: scene.turn_on
