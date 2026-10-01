@@ -1710,6 +1710,44 @@ blueprint:
           selector:
             boolean: {}
 
+    diagnosis_section:
+      name: Diagnose
+      description: >
+        Beantwortet die häufigste Frage: "Warum steht der Rollladen so?" Nach jeder
+        Fahrt, die diese Automation auslöst, wird die letzte Aktion samt Grund
+        festgehalten — z.B. "21:30 Nachtmodus → 15 % (Fenster offen)". Auch die
+        wichtigsten bewusst ausgelassenen Fahrten werden vermerkt, z.B. "07:00
+        Morgens öffnen übersprungen (Sturm)". Rein informativ: Am Verhalten der
+        Steuerung ändert sich dadurch nichts. Geschrieben wird in einem eigenen,
+        kurzen Lauf der Automation (er taucht zusätzlich in den Traces auf); ohne
+        Helfer und Logbuch entfällt er ganz.
+      icon: mdi:information-outline
+      collapsed: true
+      input:
+        status_helper:
+          name: Status-Text-Helfer (input_text, optional)
+          description: >
+            Ein Text-Helfer (input_text) NUR für dieses Fenster. Darin steht
+            jederzeit die letzte Aktion mit Uhrzeit und Grund — ideal für eine
+            Dashboard-Karte. Empfohlen: beim Anlegen die maximale Länge auf 255
+            setzen (Standard sind 100 Zeichen, längere Texte werden gekürzt).
+            Leer lassen = kein Status-Text (bisheriges Verhalten).
+          default: []
+          selector:
+            entity:
+              domain: input_text
+        status_logbook:
+          name: Zusätzlich ins Logbuch schreiben
+          description: >
+            Schreibt jede Aktion zusätzlich als Eintrag ins Logbuch des Rollladens —
+            so lässt sich auch der Verlauf nachvollziehen, nicht nur die letzte
+            Aktion. Funktioniert auch ohne Status-Text-Helfer, setzt aber die
+            Logbuch-Integration voraus (bei Standard-Installationen immer
+            vorhanden). Aus = keine Logbuch-Einträge (bisheriges Verhalten).
+          default: false
+          selector:
+            boolean: {}
+
 mode: parallel
 max: 20
 
@@ -1961,6 +1999,8 @@ variables:
   notification_timeout_tilted: !input notification_timeout_tilted
   notification_device: !input notification_device
   notify_only_when_home: !input notify_only_when_home
+  status_helper: !input status_helper
+  status_logbook: !input status_logbook
   notification_repeat_interval: !input notification_repeat_interval
   notification_repeat_max: !input notification_repeat_max
   notification_extra_targets: !input notification_extra_targets
@@ -2035,6 +2075,9 @@ trigger_variables:
   # Für die Verzögerungs-Trigger der Beschattung (Template-Trigger sehen die
   # Werte aus variables: nicht)
   cover_tv: !input cover
+  # Diagnose: Schreib-Trigger nur, wenn Helfer oder Logbuch genutzt werden
+  status_helper_tv: !input status_helper
+  status_logbook_tv: !input status_logbook
   shading_start_delay_tv: !input shading_start_delay
   shading_end_delay_tv: !input shading_end_delay
   shading_status_helper_tv: !input shading_status_helper
@@ -2203,6 +2246,16 @@ triggers:
       cover: "{{ cover_tv }}"
       window: "{{ window_sensor_tv }}"
     id: notify_extra_target
+  # Diagnose: Jede Fahrt meldet ihren Grund per Event an die eigene Instanz
+  # (über den Rollladen gefiltert); ein kurzer eigener Lauf schreibt Text-Helfer
+  # und Logbuch — so steht der Schreib-Code nur einmal in der Datei. Ohne Helfer
+  # und ohne Logbuch ist der Trigger aus, die Events verpuffen dann folgenlos
+  - trigger: event
+    event_type: s42_rollladen_status
+    event_data:
+      cover: "{{ cover_tv }}"
+    id: status_update
+    enabled: "{{ status_helper_tv is string or status_logbook_tv }}"
   - trigger: time_pattern
     minutes: "/5"
     id: shading_tick
@@ -2400,10 +2453,10 @@ actions:
   # die Benachrichtigungen samt Zusatz-Diensten und Abräumen (bewegen nichts;
   # das nächtliche Schließen im Abräum-Zweig prüft den Notfall selbst) sowie die
   # Verzögerungs-Trigger der Beschattung (pflegen nur ihre Merker, der Zweig
-  # prüft den Notfall danach selbst)
+  # prüft den Notfall danach selbst) und das Festhalten des Status (Diagnose)
   - condition: >-
       {{ trigger.id | default('') in ['emergency_open', 'emergency_ended', 'window_open_long', 'window_tilted_long', 'window_closed',
-                                      'notify_extra_target', 'shading_start_delayed', 'shading_end_delayed']
+                                      'notify_extra_target', 'shading_start_delayed', 'shading_end_delayed', 'status_update']
          or not emergency_active }}
   # Pausier-Helfer: hält die AUTOMATIK an, mit diesen Ausnahmen — Notfall-Öffnen
   # (Sicherheit geht vor), Sturmschutz (Hardware-Schutz geht vor),
@@ -2414,12 +2467,42 @@ actions:
   # Abwesenheits-Merker ab, fährt in der Pause nicht), das Regen-Aufräumen
   # (Regen-Snapshot; das Zurückfahren nach dem Regen prüft die Pause selbst) und
   # die Verzögerungs-Trigger der Beschattung (pflegen nur ihre Merker, der
-  # Zweig prüft die Pause danach selbst)
+  # Zweig prüft die Pause danach selbst) sowie das Festhalten des Status (Diagnose)
   - condition: >-
       {{ trigger.id | default('') in ['emergency_open', 'storm_detected', 'window_closed', 'close_shutter_action', 'block_released',
-                                      'away_return', 'rain_end', 'rain_window_closed', 'shading_start_delayed', 'shading_end_delayed']
+                                      'away_return', 'rain_end', 'rain_window_closed', 'shading_start_delayed', 'shading_end_delayed',
+                                      'status_update']
          or not pause_active }}
   - choose:
+      # --- DIAGNOSE: LETZTE AKTION FESTHALTEN ---
+      # Text-Helfer auf dessen Max-Länge gekürzt; continue_on_error, damit ein
+      # fehlender oder falsch konfigurierter Helfer bzw. eine fehlende
+      # Logbuch-Integration nie stört
+      - conditions:
+          - condition: trigger
+            id: status_update
+        sequence:
+          - variables:
+              status_text: "{{ trigger.event.data.text | default('') | string }}"
+          - if:
+              - "{{ status_helper is string }}"
+            then:
+              - action: input_text.set_value
+                continue_on_error: true
+                target:
+                  entity_id: "{{ status_helper }}"
+                data:
+                  value: "{{ (now().strftime('%H:%M ') ~ status_text)[:state_attr(status_helper, 'max') | int(100)] }}"
+          - if:
+              - "{{ status_logbook }}"
+            then:
+              - action: logbook.log
+                continue_on_error: true
+                data:
+                  name: "{{ state_attr(cover_entity, 'friendly_name') or cover_entity }}"
+                  entity_id: "{{ cover_entity }}"
+                  message: "{{ status_text }}"
+
       # --- MORGENS ÖFFNEN ---
       - conditions:
           - condition: trigger
@@ -2503,7 +2586,14 @@ actions:
               morning_target: >-
                 {{ [morning_position | int, frost_max_position | int] | min if frost_active
                    else morning_position | int }}
-          - condition: "{{ not storm_enabled or (wind_now | float(0)) < wind_speed_threshold }}"
+          - if:
+              - "{{ storm_enabled and (wind_now | float(0)) >= wind_speed_threshold }}"
+            then:
+              - event: s42_rollladen_status
+                event_data:
+                  cover: "{{ cover_entity }}"
+                  text: "Morgens öffnen übersprungen (Sturm)"
+              - stop: "Sturm — Morgens-Öffnen entfällt"
           # Regenschutz aktiv: nicht öffnen, sondern die Morgen-Position als
           # Rückkehr-Position fürs Regenende vormerken (Regen-Snapshot überschreiben)
           - if:
@@ -2517,6 +2607,10 @@ actions:
                     data:
                       scene_id: "{{ 'rain_' ~ (cover_entity | slugify) }}"
                       entities: "{{ {cover_entity: {'state': 'open', 'current_position': morning_target | int}} }}"
+              - event: s42_rollladen_status
+                event_data:
+                  cover: "{{ cover_entity }}"
+                  text: "Morgens öffnen übersprungen (Regenschutz)"
               - stop: "Regenschutz aktiv — Morgens-Öffnen erst nach dem Regen"
           - choose:
               # Sanftes Wecken: in Schritten zur Zielposition statt in einem Zug
@@ -2550,6 +2644,10 @@ actions:
                       # Erster Schritt sofort, der letzte nach Ablauf der Dauer
                       soft_interval: >-
                         {{ (morning_soft_duration | int(0) * 60 / ([soft_plan | length - 1, 1] | max)) | round(0) | int }}
+                  - event: s42_rollladen_status
+                    event_data:
+                      cover: "{{ cover_entity }}"
+                      text: "Morgens → {{ morning_target }} % sanft in {{ morning_soft_duration | int }} Min.{{ ' (Frost-Grenze)' if morning_target | int < morning_position | int else '' }}"
                   - repeat:
                       sequence:
                         - action: cover.set_cover_position
@@ -2625,6 +2723,10 @@ actions:
                       entity_id: !input cover
                     data:
                       position: "{{ morning_target }}"
+                  - event: s42_rollladen_status
+                    event_data:
+                      cover: "{{ cover_entity }}"
+                      text: "Morgens → {{ morning_target }} %{{ ' (Frost-Grenze)' if morning_target | int < morning_position | int else '' }}"
               # Fallback für Cover ohne Positions-Attribut (kann auch bei Frost
               # nicht begrenzen, open_cover fährt immer ganz auf)
               - conditions:
@@ -2633,6 +2735,10 @@ actions:
                   - action: cover.open_cover
                     target:
                       entity_id: !input cover
+                  - event: s42_rollladen_status
+                    event_data:
+                      cover: "{{ cover_entity }}"
+                      text: "Morgens → auf"
           # Morgens-Öffnen ist für die Beschattung eine Fremdbewegung: Status freigeben,
           # damit ein heißer Sommermorgen direkt wieder frisch beschattet werden kann
           - if:
@@ -2816,6 +2922,10 @@ actions:
                         {% set vent = tilted_position if (win_now == 'tilted' or treat_open_as_tilted)
                            else night_ventilation_position %}
                         {{ [vent | int, rain_position | int] | min }}
+                  - event: s42_rollladen_status
+                    event_data:
+                      cover: "{{ cover_entity }}"
+                      text: "Nachtmodus → {{ [(tilted_position if (win_now == 'tilted' or treat_open_as_tilted) else night_ventilation_position) | int, rain_position | int] | min }} % (Fenster {{ 'gekippt' if win_now == 'tilted' else 'offen' }}, Regen)"
               - conditions:
                   - "{{ win_now == 'tilted' or (treat_open_as_tilted and win_now in ['on', 'open']) }}"
                 sequence:
@@ -2824,6 +2934,10 @@ actions:
                       entity_id: !input cover
                     data:
                       position: !input tilted_position
+                  - event: s42_rollladen_status
+                    event_data:
+                      cover: "{{ cover_entity }}"
+                      text: "Nachtmodus → {{ tilted_position | int }} % (Fenster {{ 'gekippt' if win_now == 'tilted' else 'offen, wie gekippt' }})"
               - conditions:
                   - "{{ win_now in ['on', 'open'] }}"
                 sequence:
@@ -2832,6 +2946,10 @@ actions:
                       entity_id: !input cover
                     data:
                       position: !input night_ventilation_position
+                  - event: s42_rollladen_status
+                    event_data:
+                      cover: "{{ cover_entity }}"
+                      text: "Nachtmodus → {{ night_ventilation_position | int }} % (Fenster offen)"
             default:
               # Fenster zu: ganz schließen (Nachtposition 0 oder Cover ohne
               # Positionsangabe), sonst nur abwärts auf die Nachtposition — ein
@@ -2843,6 +2961,10 @@ actions:
                       - action: cover.close_cover
                         target:
                           entity_id: !input cover
+                      - event: s42_rollladen_status
+                        event_data:
+                          cover: "{{ cover_entity }}"
+                          text: "Nachtmodus → zu"
                   - conditions:
                       - "{{ state_attr(cover_entity, 'current_position') | int(-1) > night_close_position | int(0) }}"
                     sequence:
@@ -2851,6 +2973,10 @@ actions:
                           entity_id: !input cover
                         data:
                           position: !input night_close_position
+                      - event: s42_rollladen_status
+                        event_data:
+                          cover: "{{ cover_entity }}"
+                          text: "Nachtmodus → {{ night_close_position | int }} %"
 
       # --- STURMSCHUTZ ---
       - conditions:
@@ -2875,6 +3001,10 @@ actions:
               - action: cover.open_cover
                 target:
                   entity_id: !input cover
+              - event: s42_rollladen_status
+                event_data:
+                  cover: "{{ cover_entity }}"
+                  text: "Sturm → auf"
             else:
               # Hindernis-Sperre geht auch dem Panzer-Modus vor: Ein aufgelaufener,
               # ausgehakter Panzer schützt vor nichts mehr — die Freigabe holt es nach
@@ -2882,6 +3012,26 @@ actions:
               - action: cover.close_cover
                 target:
                   entity_id: !input cover
+              - event: s42_rollladen_status
+                event_data:
+                  cover: "{{ cover_entity }}"
+                  text: "Sturm → zu (Panzer-Modus)"
+
+      # --- STURMSCHUTZ ÜBERSPRUNGEN (nur Diagnose) ---
+      # Greift nur, wenn die Option davor nicht passte: Fenster nicht zu und
+      # "Aktion bei Sturm erzwingen" aus — bewegt nichts, vermerkt nur den Grund
+      - conditions:
+          - condition: trigger
+            id: storm_detected
+        sequence:
+          - event: s42_rollladen_status
+            event_data:
+              cover: "{{ cover_entity }}"
+              text: >-
+                Sturmschutz übersprungen
+                ({{ 'Fenster gekippt' if window_state == 'tilted'
+                    else 'Fenster offen' if window_state in ['on', 'open']
+                    else 'Fensterstatus unbekannt' }})
 
       # --- STURM-ENTWARNUNG: NORMALZUSTAND HERSTELLEN ---
       # Bewusst keine Pause-Ausnahme: Während einer Pause passiert nichts, das
@@ -2938,6 +3088,10 @@ actions:
                               entity_id: !input cover
                             data:
                               position: !input tilted_position
+                          - event: s42_rollladen_status
+                            event_data:
+                              cover: "{{ cover_entity }}"
+                              text: "Sturm vorbei → {{ tilted_position | int }} % (Nachtmodus, Fenster {{ 'gekippt' if window_state == 'tilted' else 'offen, wie gekippt' }})"
                       - conditions:
                           - "{{ window_state in ['on', 'open'] }}"
                         sequence:
@@ -2946,6 +3100,10 @@ actions:
                               entity_id: !input cover
                             data:
                               position: !input night_ventilation_position
+                          - event: s42_rollladen_status
+                            event_data:
+                              cover: "{{ cover_entity }}"
+                              text: "Sturm vorbei → {{ night_ventilation_position | int }} % (Nachtmodus, Fenster offen)"
                     default:
                       # Wie im Nachtmodus-Zweig: ganz schließen oder nur abwärts auf die Nachtposition
                       - choose:
@@ -2955,6 +3113,10 @@ actions:
                               - action: cover.close_cover
                                 target:
                                   entity_id: !input cover
+                              - event: s42_rollladen_status
+                                event_data:
+                                  cover: "{{ cover_entity }}"
+                                  text: "Sturm vorbei → zu (Nachtmodus)"
                           - conditions:
                               - "{{ state_attr(cover_entity, 'current_position') | int(-1) > night_close_position | int(0) }}"
                             sequence:
@@ -2963,6 +3125,10 @@ actions:
                                   entity_id: !input cover
                                 data:
                                   position: !input night_close_position
+                              - event: s42_rollladen_status
+                                event_data:
+                                  cover: "{{ cover_entity }}"
+                                  text: "Sturm vorbei → {{ night_close_position | int }} % (Nachtmodus)"
               # Tagsüber im Panzer-Modus: den noch geschlossenen Rollladen wie
               # morgens öffnen (nur aufwärts, Fensterregel wie beim Sturmschutz).
               # Hat ihn inzwischen etwas anderes bewegt, bleibt er. Eine laufende
@@ -2990,6 +3156,10 @@ actions:
                               entity_id: !input cover
                             data:
                               position: "{{ release_target }}"
+                          - event: s42_rollladen_status
+                            event_data:
+                              cover: "{{ cover_entity }}"
+                              text: "Sturm vorbei → {{ release_target }} %"
                       # Fallback für Cover ohne Positions-Attribut
                       - conditions:
                           - "{{ state_attr(cover_entity, 'current_position') is none }}"
@@ -2997,6 +3167,10 @@ actions:
                           - action: cover.open_cover
                             target:
                               entity_id: !input cover
+                          - event: s42_rollladen_status
+                            event_data:
+                              cover: "{{ cover_entity }}"
+                              text: "Sturm vorbei → auf"
 
       # --- PAUSE BEENDET: ZUSTAND NACHHOLEN ---
       - conditions:
@@ -3046,6 +3220,10 @@ actions:
                   entity_id: !input cover
                 data:
                   position: !input rain_position
+              - event: s42_rollladen_status
+                event_data:
+                  cover: "{{ cover_entity }}"
+                  text: "Pause beendet → {{ rain_position | int }} % (Regenschutz)"
           # Verpassten Nachtmodus nachholen — "nachts offen" wäre der schlimmste
           # während der Pause verpasste Zustand. Sturm hat weiterhin Vorrang.
           - variables:
@@ -3076,6 +3254,10 @@ actions:
                             {% set vent = tilted_position if (window_state == 'tilted' or treat_open_as_tilted)
                                else night_ventilation_position %}
                             {{ [vent | int, rain_position | int] | min }}
+                      - event: s42_rollladen_status
+                        event_data:
+                          cover: "{{ cover_entity }}"
+                          text: "Pause beendet → {{ [(tilted_position if (window_state == 'tilted' or treat_open_as_tilted) else night_ventilation_position) | int, rain_position | int] | min }} % (Nachtmodus, Regen)"
                   - conditions:
                       - "{{ window_state == 'tilted' or (treat_open_as_tilted and window_state in ['on', 'open']) }}"
                     sequence:
@@ -3084,6 +3266,10 @@ actions:
                           entity_id: !input cover
                         data:
                           position: !input tilted_position
+                      - event: s42_rollladen_status
+                        event_data:
+                          cover: "{{ cover_entity }}"
+                          text: "Pause beendet → {{ tilted_position | int }} % (Nachtmodus, Fenster {{ 'gekippt' if window_state == 'tilted' else 'offen, wie gekippt' }})"
                   - conditions:
                       - "{{ window_state in ['on', 'open'] }}"
                     sequence:
@@ -3092,6 +3278,10 @@ actions:
                           entity_id: !input cover
                         data:
                           position: !input night_ventilation_position
+                      - event: s42_rollladen_status
+                        event_data:
+                          cover: "{{ cover_entity }}"
+                          text: "Pause beendet → {{ night_ventilation_position | int }} % (Nachtmodus, Fenster offen)"
                 default:
                   # Wie im Nachtmodus-Zweig: ganz schließen oder nur abwärts auf die Nachtposition
                   - choose:
@@ -3101,6 +3291,10 @@ actions:
                           - action: cover.close_cover
                             target:
                               entity_id: !input cover
+                          - event: s42_rollladen_status
+                            event_data:
+                              cover: "{{ cover_entity }}"
+                              text: "Pause beendet → zu (Nachtmodus)"
                       - conditions:
                           - "{{ state_attr(cover_entity, 'current_position') | int(-1) > night_close_position | int(0) }}"
                         sequence:
@@ -3109,6 +3303,10 @@ actions:
                               entity_id: !input cover
                             data:
                               position: !input night_close_position
+                          - event: s42_rollladen_status
+                            event_data:
+                              cover: "{{ cover_entity }}"
+                              text: "Pause beendet → {{ night_close_position | int }} % (Nachtmodus)"
 
       # --- NOTFALL-ÖFFNEN ---
       - conditions:
@@ -3123,6 +3321,10 @@ actions:
           - action: cover.open_cover
             target:
               entity_id: !input cover
+          - event: s42_rollladen_status
+            event_data:
+              cover: "{{ cover_entity }}"
+              text: "Notfall → auf"
           # Status-Helfer freigeben: Nach dem Notfall sollen Beschattung und
           # Sonnenheizen frisch bewerten, statt die Notfall-Fahrt als manuellen
           # Eingriff zu werten bzw. an einem Alt-Zustand festzuhalten
@@ -3182,6 +3384,10 @@ actions:
                       - action: cover.close_cover
                         target:
                           entity_id: !input cover
+                      - event: s42_rollladen_status
+                        event_data:
+                          cover: "{{ cover_entity }}"
+                          text: "Notfall vorbei → zu (Sturm, Panzer-Modus)"
               - conditions:
                   - "{{ night_mode_on }}"
                   # Hindernis-Sperre: nicht herunterfahren — das Ende der Sperre holt nach
@@ -3196,6 +3402,10 @@ actions:
                               entity_id: !input cover
                             data:
                               position: !input tilted_position
+                          - event: s42_rollladen_status
+                            event_data:
+                              cover: "{{ cover_entity }}"
+                              text: "Notfall vorbei → {{ tilted_position | int }} % (Nachtmodus, Fenster {{ 'gekippt' if window_state == 'tilted' else 'offen, wie gekippt' }})"
                       - conditions:
                           - "{{ window_state in ['on', 'open'] }}"
                         sequence:
@@ -3204,6 +3414,10 @@ actions:
                               entity_id: !input cover
                             data:
                               position: !input night_ventilation_position
+                          - event: s42_rollladen_status
+                            event_data:
+                              cover: "{{ cover_entity }}"
+                              text: "Notfall vorbei → {{ night_ventilation_position | int }} % (Nachtmodus, Fenster offen)"
                     default:
                       # Wie im Nachtmodus-Zweig: ganz schließen oder nur abwärts auf die Nachtposition
                       - choose:
@@ -3213,6 +3427,10 @@ actions:
                               - action: cover.close_cover
                                 target:
                                   entity_id: !input cover
+                              - event: s42_rollladen_status
+                                event_data:
+                                  cover: "{{ cover_entity }}"
+                                  text: "Notfall vorbei → zu (Nachtmodus)"
                           - conditions:
                               - "{{ state_attr(cover_entity, 'current_position') | int(-1) > night_close_position | int(0) }}"
                             sequence:
@@ -3221,6 +3439,10 @@ actions:
                                   entity_id: !input cover
                                 data:
                                   position: !input night_close_position
+                              - event: s42_rollladen_status
+                                event_data:
+                                  cover: "{{ cover_entity }}"
+                                  text: "Notfall vorbei → {{ night_close_position | int }} % (Nachtmodus)"
 
       # --- HINDERNIS-SPERRE AUFGEHOBEN: ZUSTAND NACHHOLEN ---
       - conditions:
@@ -3266,6 +3488,10 @@ actions:
                       - action: cover.close_cover
                         target:
                           entity_id: !input cover
+                      - event: s42_rollladen_status
+                        event_data:
+                          cover: "{{ cover_entity }}"
+                          text: "Hindernis frei → zu (Sturm, Panzer-Modus)"
               # Verpassten Nachtmodus nachholen (fensterabhängig wie beim Pause-Ende);
               # in einer Pause holt ihn stattdessen das Pause-Ende nach
               - conditions:
@@ -3281,6 +3507,10 @@ actions:
                               entity_id: !input cover
                             data:
                               position: !input tilted_position
+                          - event: s42_rollladen_status
+                            event_data:
+                              cover: "{{ cover_entity }}"
+                              text: "Hindernis frei → {{ tilted_position | int }} % (Nachtmodus, Fenster {{ 'gekippt' if window_state == 'tilted' else 'offen, wie gekippt' }})"
                       - conditions:
                           - "{{ window_state in ['on', 'open'] }}"
                         sequence:
@@ -3289,6 +3519,10 @@ actions:
                               entity_id: !input cover
                             data:
                               position: !input night_ventilation_position
+                          - event: s42_rollladen_status
+                            event_data:
+                              cover: "{{ cover_entity }}"
+                              text: "Hindernis frei → {{ night_ventilation_position | int }} % (Nachtmodus, Fenster offen)"
                     default:
                       # Wie im Nachtmodus-Zweig: ganz schließen oder nur abwärts auf die Nachtposition
                       - choose:
@@ -3298,6 +3532,10 @@ actions:
                               - action: cover.close_cover
                                 target:
                                   entity_id: !input cover
+                              - event: s42_rollladen_status
+                                event_data:
+                                  cover: "{{ cover_entity }}"
+                                  text: "Hindernis frei → zu (Nachtmodus)"
                           - conditions:
                               - "{{ state_attr(cover_entity, 'current_position') | int(-1) > night_close_position | int(0) }}"
                             sequence:
@@ -3306,6 +3544,10 @@ actions:
                                   entity_id: !input cover
                                 data:
                                   position: !input night_close_position
+                              - event: s42_rollladen_status
+                                event_data:
+                                  cover: "{{ cover_entity }}"
+                                  text: "Hindernis frei → {{ night_close_position | int }} % (Nachtmodus)"
 
       # --- NACH HA-NEUSTART: VERPASSTES NACHHOLEN ---
       # Fällt die Morgens-Uhrzeit in einen Neustart, feuert ihr Trigger nicht; ein
@@ -3408,6 +3650,10 @@ actions:
                               entity_id: !input cover
                             data:
                               position: "{{ morning_target }}"
+                          - event: s42_rollladen_status
+                            event_data:
+                              cover: "{{ cover_entity }}"
+                              text: "Nach Neustart → {{ morning_target }} % (Morgens nachgeholt){{ ' (Frost-Grenze)' if morning_target | int < morning_position | int else '' }}"
                       # Cover ohne Positions-Attribut: nur öffnen, wenn er als
                       # geschlossen gemeldet wird (unavailable/unknown zählt nicht)
                       - conditions:
@@ -3417,6 +3663,10 @@ actions:
                           - action: cover.open_cover
                             target:
                               entity_id: !input cover
+                          - event: s42_rollladen_status
+                            event_data:
+                              cover: "{{ cover_entity }}"
+                              text: "Nach Neustart → auf (Morgens nachgeholt)"
               # Aktiven Nachtmodus wiederherstellen — nur, solange wirklich Nacht ist:
               # Sonne unter dem Horizont, und es ist Abend (Sonne nicht steigend) oder
               # die Morgens-Uhrzeit steht noch bevor. Danach hat der Morgens-Trigger
@@ -3458,6 +3708,10 @@ actions:
                               entity_id: !input cover
                             data:
                               position: !input tilted_position
+                          - event: s42_rollladen_status
+                            event_data:
+                              cover: "{{ cover_entity }}"
+                              text: "Nach Neustart → {{ tilted_position | int }} % (Nachtmodus, Fenster {{ 'gekippt' if win_now == 'tilted' else 'offen, wie gekippt' }})"
                       - conditions:
                           - "{{ win_now in ['on', 'open'] }}"
                           - "{{ not treat_open_as_tilted }}"
@@ -3468,6 +3722,10 @@ actions:
                               entity_id: !input cover
                             data:
                               position: !input night_ventilation_position
+                          - event: s42_rollladen_status
+                            event_data:
+                              cover: "{{ cover_entity }}"
+                              text: "Nach Neustart → {{ night_ventilation_position | int }} % (Nachtmodus, Fenster offen)"
                       # Fenster zu: wie beim Einschalten des Nachtmodus ganz schließen
                       # oder nur abwärts auf die Nachtposition
                       - conditions:
@@ -3480,6 +3738,10 @@ actions:
                                   - action: cover.close_cover
                                     target:
                                       entity_id: !input cover
+                                  - event: s42_rollladen_status
+                                    event_data:
+                                      cover: "{{ cover_entity }}"
+                                      text: "Nach Neustart → zu (Nachtmodus)"
                               - conditions:
                                   - "{{ state_attr(cover_entity, 'current_position') | int(-1) > night_close_position | int(0) }}"
                                 sequence:
@@ -3488,6 +3750,10 @@ actions:
                                       entity_id: !input cover
                                     data:
                                       position: !input night_close_position
+                                  - event: s42_rollladen_status
+                                    event_data:
+                                      cover: "{{ cover_entity }}"
+                                      text: "Nach Neustart → {{ night_close_position | int }} % (Nachtmodus)"
 
       # --- ABWESENHEIT BEGINNT ---
       - conditions:
@@ -3555,6 +3821,10 @@ actions:
                           entity_id: !input cover
                         data:
                           position: !input away_close_position
+                      - event: s42_rollladen_status
+                        event_data:
+                          cover: "{{ cover_entity }}"
+                          text: "Abwesenheit → {{ away_close_position | int }} %"
                   # Fallback für Cover ohne Positions-Attribut: ganz schließen
                   - conditions:
                       - "{{ state_attr(cover_entity, 'current_position') is none }}"
@@ -3563,6 +3833,10 @@ actions:
                       - action: cover.close_cover
                         target:
                           entity_id: !input cover
+                      - event: s42_rollladen_status
+                        event_data:
+                          cover: "{{ cover_entity }}"
+                          text: "Abwesenheit → zu"
 
       # --- ABWESENHEIT ENDET: JEMAND IST ZURÜCK ---
       - conditions:
@@ -3638,6 +3912,10 @@ actions:
                           entity_id: !input cover
                         data:
                           position: "{{ return_target }}"
+                      - event: s42_rollladen_status
+                        event_data:
+                          cover: "{{ cover_entity }}"
+                          text: "Heimkommen → {{ return_target }} %"
                   # Fallback für Cover ohne Positions-Attribut
                   - conditions:
                       - "{{ state_attr(cover_entity, 'current_position') is none }}"
@@ -3645,6 +3923,10 @@ actions:
                       - action: cover.open_cover
                         target:
                           entity_id: !input cover
+                      - event: s42_rollladen_status
+                        event_data:
+                          cover: "{{ cover_entity }}"
+                          text: "Heimkommen → auf"
 
       # --- SONNENSCHUTZ ---
       - conditions:
@@ -3991,6 +4273,10 @@ actions:
                               entity_id: !input cover
                             data:
                               position: "{{ target_position }}"
+                          - event: s42_rollladen_status
+                            event_data:
+                              cover: "{{ cover_entity }}"
+                              text: "{{ 'Blendschutz' if glare_enabled and target_position | int != heat_target | int else 'Beschattung' }} → {{ target_position | int }} %"
                     else:
                       # Beschattung beginnt: Anfangsbewegung immer ausführen
                       - action: input_boolean.turn_on
@@ -4004,6 +4290,10 @@ actions:
                               entity_id: !input cover
                             data:
                               position: "{{ target_position }}"
+                          - event: s42_rollladen_status
+                            event_data:
+                              cover: "{{ cover_entity }}"
+                              text: "{{ 'Blendschutz' if glare_enabled and target_position | int != heat_target | int else 'Beschattung' }} beginnt → {{ target_position | int }} %"
               # Beschattung beenden. Mit Blendschutz beendet Abkühlen die Episode
               # nicht (sonst Ende/Neustart-Pendeln) — sie wechselt oben ins
               # Blendschutz-Ziel
@@ -4035,6 +4325,10 @@ actions:
                       position: >-
                         {{ [shading_end_position | int, frost_max_position | int] | min if frost_active
                            else shading_end_position | int }}
+                  - event: s42_rollladen_status
+                    event_data:
+                      cover: "{{ cover_entity }}"
+                      text: "Beschattungs-Ende → {{ [shading_end_position | int, frost_max_position | int] | min if frost_active else shading_end_position | int }} %"
                   # Wie bei Morgens öffnen: Endet die Beschattung während des Lüftens,
                   # ersetzt die End-Position die gemerkte Ausgangsposition (sonst holt
                   # das Zurückfahren die alte Beschattungs-Position zurück)
@@ -4144,6 +4438,10 @@ actions:
                       position: >-
                         {{ [solar_heating_position | int, frost_max_position | int] | min if frost_active
                            else solar_heating_position | int }}
+                  - event: s42_rollladen_status
+                    event_data:
+                      cover: "{{ cover_entity }}"
+                      text: "Sonnenheizen → {{ [solar_heating_position | int, frost_max_position | int] | min if frost_active else solar_heating_position | int }} %"
                   # Wie bei Morgens öffnen: Öffnet Sonnenheizen während des Lüftens,
                   # ersetzt das die gemerkte Ausgangsposition (sonst fährt das
                   # Zurückfahren wieder zu, und der gesetzte Helfer verhindert ein
@@ -4199,6 +4497,10 @@ actions:
           - action: light.turn_off
             target:
               entity_id: "{{ lights_to_turn_off }}"
+          - event: s42_rollladen_status
+            event_data:
+              cover: "{{ cover_entity }}"
+              text: "Moskito: {{ lights_to_turn_off | length }} {{ 'Licht' if lights_to_turn_off | length == 1 else 'Lichter' }} aus"
 
       # --- BENACHRICHTIGUNG: FENSTER LANGE OFFEN/GEKIPPT (+ ERINNERUNGEN) ---
       - conditions:
@@ -4437,6 +4739,10 @@ actions:
                         continue_on_error: true
                         target:
                           entity_id: !input cover
+                      - event: s42_rollladen_status
+                        event_data:
+                          cover: "{{ cover_entity }}"
+                          text: "Fenster zu → zu (Nachtmodus)"
                   - conditions:
                       - "{{ state_attr(cover_entity, 'current_position') | int(-1) > night_close_position | int(0) }}"
                     sequence:
@@ -4446,6 +4752,10 @@ actions:
                           entity_id: !input cover
                         data:
                           position: !input night_close_position
+                      - event: s42_rollladen_status
+                        event_data:
+                          cover: "{{ cover_entity }}"
+                          text: "Fenster zu → {{ night_close_position | int }} % (Nachtmodus)"
           - if:
               - "{{ device_name_map | length > 0 }}"
             then:
@@ -4471,6 +4781,10 @@ actions:
           - action: cover.close_cover
             target:
               entity_id: !input cover
+          - event: s42_rollladen_status
+            event_data:
+              cover: "{{ cover_entity }}"
+              text: 'Knopf "Rollladen schließen" → zu'
 
       # --- FENSTER-INTERAKTION (KIPPEN/ÖFFNEN + ZURÜCKFAHREN) ---
       - conditions:
@@ -4518,6 +4832,10 @@ actions:
                           entity_id: !input cover
                         data:
                           position: !input rain_position
+                      - event: s42_rollladen_status
+                        event_data:
+                          cover: "{{ cover_entity }}"
+                          text: "Fenster {{ 'gekippt' if trigger.to_state.state | lower == 'tilted' else 'offen' }} → {{ rain_position | int }} % (Regen)"
                       - if:
                           - "{{ shading_status_helper is string and is_state(shading_status_helper, 'on') }}"
                         then:
@@ -4533,6 +4851,10 @@ actions:
                       entity_id: !input cover
                     data:
                       position: !input tilted_position
+                  - event: s42_rollladen_status
+                    event_data:
+                      cover: "{{ cover_entity }}"
+                      text: "{{ 'Fenster gekippt' if trigger.to_state.state | lower == 'tilted' else 'Fenster offen' }} → {{ tilted_position | int }} %{{ '' if trigger.to_state.state | lower == 'tilted' else ' (wie gekippt)' }}"
               - conditions:
                   - "{{ trigger.to_state.state | lower in ['on', 'open'] }}"
                   - "{{ not treat_open_as_tilted }}"
@@ -4561,6 +4883,10 @@ actions:
                           - action: cover.open_cover
                             target:
                               entity_id: !input cover
+                          - event: s42_rollladen_status
+                            event_data:
+                              cover: "{{ cover_entity }}"
+                              text: "Fenster offen → auf"
                       - conditions:
                           - "{{ open_partial }}"
                         sequence:
@@ -4569,6 +4895,10 @@ actions:
                               entity_id: !input cover
                             data:
                               position: "{{ open_target }}"
+                          - event: s42_rollladen_status
+                            event_data:
+                              cover: "{{ cover_entity }}"
+                              text: "Fenster offen → {{ open_target | int }} %{{ ' (Frost-Grenze)' if frost_active and open_target | int < open_position | int else '' }}"
                   # Beschattungs-Status freigeben: Das Öffnen fürs Lüften ist kein
                   # manueller Eingriff — nach dem Schließen (oder Timeout) darf der
                   # nächste Tick wieder beschatten, statt bis Tagesende zu pausieren.
@@ -4593,6 +4923,10 @@ actions:
                       entity_id: !input cover
                     data:
                       position: !input night_ventilation_position
+                  - event: s42_rollladen_status
+                    event_data:
+                      cover: "{{ cover_entity }}"
+                      text: "Fenster offen → {{ night_ventilation_position | int }} % (Nachtmodus)"
           - wait_for_trigger:
               - trigger: state
                 entity_id: !input window_sensor
@@ -4702,6 +5036,10 @@ actions:
                   - action: cover.close_cover
                     target:
                       entity_id: !input cover
+                  - event: s42_rollladen_status
+                    event_data:
+                      cover: "{{ cover_entity }}"
+                      text: "Schließen erzwingen → zu (nach {{ reclose_timeout | int }} Min.)"
             else:
               - choose:
                   # Fenster zu + Nachtmodus inzwischen aktiv → schließen statt restaurieren
@@ -4718,6 +5056,10 @@ actions:
                               - action: cover.close_cover
                                 target:
                                   entity_id: !input cover
+                              - event: s42_rollladen_status
+                                event_data:
+                                  cover: "{{ cover_entity }}"
+                                  text: "Zurückfahren → zu (Nachtmodus)"
                           - conditions:
                               - "{{ state_attr(cover_entity, 'current_position') | int(-1) > night_close_position | int(0) }}"
                             sequence:
@@ -4726,6 +5068,10 @@ actions:
                                   entity_id: !input cover
                                 data:
                                   position: !input night_close_position
+                              - event: s42_rollladen_status
+                                event_data:
+                                  cover: "{{ cover_entity }}"
+                                  text: "Zurückfahren → {{ night_close_position | int }} % (Nachtmodus)"
                   # Normalfall: Ausgangsposition wiederherstellen (nur wenn der
                   # Snapshot existiert, kein Sturm aktiv ist und keine Pause läuft).
                   # Existenz via expand
@@ -4743,6 +5089,10 @@ actions:
                       - action: scene.turn_on
                         target:
                           entity_id: "{{ reclose_scene }}"
+                      - event: s42_rollladen_status
+                        event_data:
+                          cover: "{{ cover_entity }}"
+                          text: "Zurückfahren → Ausgangsposition"
                       # Restore ist eine Fremdbewegung: Beschattungs-Status freigeben,
                       # damit der nächste Tick bei Bedarf frisch beschattet, statt die
                       # Abweichung als manuellen Eingriff bis Tagesende zu sperren
@@ -4752,6 +5102,15 @@ actions:
                           - action: input_boolean.turn_off
                             target:
                               entity_id: "{{ shading_status_helper }}"
+                # Nur Diagnose: Zurückfahren bewusst ausgelassen (bewegt nichts)
+                default:
+                  - event: s42_rollladen_status
+                    event_data:
+                      cover: "{{ cover_entity }}"
+                      text: >-
+                        Zurückfahren übersprungen
+                        ({{ 'Sturm' if storm_now else 'Pause' if pause_now else 'Hindernis' if block_now
+                            else 'Ausgangsposition unbekannt' }})
 
       # --- REGENSCHUTZ: REGEN BEI GEKIPPTEM FENSTER ---
       - conditions:
@@ -4782,6 +5141,10 @@ actions:
               entity_id: !input cover
             data:
               position: !input rain_position
+          - event: s42_rollladen_status
+            event_data:
+              cover: "{{ cover_entity }}"
+              text: "Regen → {{ rain_position | int }} % (Fenster {{ 'gekippt' if window_state == 'tilted' else 'offen' }})"
           # Regenfahrt ist eine Fremdbewegung, kein manueller Eingriff:
           # Beschattungs-Status freigeben
           - if:
@@ -4811,6 +5174,10 @@ actions:
               - action: scene.turn_on
                 target:
                   entity_id: "{{ rain_scene }}"
+              - event: s42_rollladen_status
+                event_data:
+                  cover: "{{ cover_entity }}"
+                  text: "Regen vorbei → Position von vorher"
               # Zurückfahren ist eine Fremdbewegung: Beschattungs-Status freigeben
               - if:
                   - "{{ shading_status_helper is string and is_state(shading_status_helper, 'on') }}"

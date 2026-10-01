@@ -46,6 +46,8 @@ zuschaltbar.
    - Abwesenheit: kein eigener Helfer nötig — Personen, Geräte-Tracker, eine
      Personen-Gruppe oder ein vorhandener Anwesenheits-Helfer genügen. In allen
      Instanzen dieselben auswählen.
+   - Diagnose (optional): ein Text-Helfer (`input_text`) **pro Fenster**, maximale
+     Länge am besten 255, Namensvorschlag: "Rollladen-Status <Fenstername>".
 4. Für Sonnenschutz/Sonnenheizen die **Fenstergeometrie** eintragen (Ausrichtung in
    Grad, Sichtfeld, Fensterhöhe, Brüstungshöhe; bei Vordach oder Balkon darüber die
    maximale Sonnenhöhe) — Details unten.
@@ -74,6 +76,7 @@ Fenster, bis der Helfer gesetzt oder das Feature deaktiviert ist.
 | Hindernis-Sperre        | Fährt nicht nach unten, solange ein Sperr-Sensor an ist (z.B. Fliegengittertür offen, jemand auf der Terrasse); mit Wartezeit                                                               | Kontakt-/Präsenzsensor (optional)                                |
 | Nach Neustart           | Holt nach einem HA-Neustart ein verpasstes Morgens-Öffnen (bis 2 h danach) nach bzw. stellt einen aktiven Nachtmodus wieder her                                                             | — (Schalter, standardmäßig aus)                                  |
 | Abwesenheit             | Schließt, wenn alle weg sind (nur bei geschlossenem Fenster); öffnet beim Heimkommen tagsüber; optional strenger beschatten                                                                 | Personen, Tracker o. Ä. (Anwesenheit)                            |
+| Diagnose                | Zeigt die letzte Aktion samt Grund, z. B. "21:30 Nachtmodus → 15 % (Fenster offen)"; optional zusätzlich im Logbuch                                                                         | `input_text`-Helfer pro Fenster (optional)                       |
 
 **Prioritäten:** Ganz oben steht das **Notfall-Öffnen** — meldet ein Notfall-Sensor
 Alarm, fährt der Rollladen hoch und bleibt oben, egal was Sturmschutz, Pause oder
@@ -857,6 +860,62 @@ dann kein Nachholen, sondern ein Fehler.
 Beschattung und Sonnenheizen brauchen kein Nachholen: Ihre 5-Minuten-Durchläufe
 übernehmen nach dem Start von selbst.
 
+### Diagnose: Warum steht der Rollladen so?
+
+Bei so vielen Features ist das die häufigste Frage. Die Antwort liefert ein
+optionaler Text-Helfer im Abschnitt "Diagnose": Nach jeder Fahrt, die die
+Automation auslöst, steht darin die letzte Aktion mit Uhrzeit und Grund — nach dem
+Muster `Uhrzeit Aktion → Ziel (Grund)`, zum Beispiel:
+
+- `07:00 Morgens → 100 %` (bei Frost `Morgens → 90 % (Frost-Grenze)`)
+- `21:30 Nachtmodus → zu` bzw. `21:30 Nachtmodus → 15 % (Fenster offen)`
+- `13:05 Beschattung beginnt → 35 %`, `13:30 Beschattung → 32 %` und später
+  `16:40 Beschattungs-Ende → 100 %` (mit Blendschutz `Blendschutz → 50 %`)
+- `09:12 Fenster gekippt → 20 %`, nach dem Schließen `09:40 Zurückfahren → Ausgangsposition`
+- `14:02 Sturm → auf` (im Panzer-Modus `Sturm → zu (Panzer-Modus)`), danach
+  `Sturm vorbei → 100 %`
+- `Regen → 10 % (Fenster gekippt)` und `Regen vorbei → Position von vorher`
+- `Abwesenheit → 0 %`, `Heimkommen → 100 %`, `Notfall → auf`, `Hindernis frei → zu
+(Nachtmodus)`, `Nach Neustart → 100 % (Morgens nachgeholt)`
+- `Sonnenheizen → 100 %`, `Schließen erzwingen → zu (nach 30 Min.)`,
+  `Knopf "Rollladen schließen" → zu`, `Pause beendet → zu (Nachtmodus)`,
+  `Moskito: 2 Lichter aus`
+
+Zusätzlich werden die Fälle vermerkt, in denen eine erwartete Fahrt bewusst
+ausgelassen oder ersetzt wurde — sie geben sonst am meisten Rätsel auf:
+
+- `07:00 Morgens öffnen übersprungen (Sturm)` bzw. `(Regenschutz)`
+- `14:02 Sturmschutz übersprungen (Fenster offen)` — das Fenster war offen und
+  "Aktion bei Sturm erzwingen" ist aus.
+- `09:40 Zurückfahren → zu (Nachtmodus)` — während des Lüftens kam der Nachtmodus,
+  statt der Ausgangsposition wird geschlossen.
+- `09:40 Zurückfahren übersprungen (Sturm)` bzw. `(Pause)`, `(Hindernis)` oder
+  `(Ausgangsposition unbekannt)` — Letzteres, wenn die beim Öffnen gemerkte
+  Position fehlt (gemerkte Positionen überleben keinen Neustart von Home Assistant).
+
+Meldet der Fenstersensor beim Nachtmodus oder Sturm gerade keinen gültigen Zustand
+(z. B. `unavailable`), steht als Grund `(Fensterstatus unbekannt)`.
+
+**Einrichten:** Unter _Einstellungen → Geräte & Dienste → Helfer_ einen Helfer vom
+Typ "Text" anlegen — einen **pro Fenster**, sonst überschreiben sich die Instanzen
+gegenseitig. Die maximale Länge am besten auf 255 setzen (Standard: 100 Zeichen) —
+die Texte sind zwar meist deutlich kürzer, zu lange würden aber abgeschnitten.
+Den Helfer dann in der Instanz unter "Diagnose" auswählen und z. B. als
+Entitäts-Karte neben den Rollladen ins Dashboard legen. Den Verlauf der letzten
+Aktionen zeigt schon der Verlauf des Helfers selbst.
+
+**Logbuch:** Mit "Zusätzlich ins Logbuch schreiben" erscheint jede Aktion außerdem
+als Eintrag im Logbuch des Rollladens (Name = Name des Rollladens) — so steht der
+Grund direkt neben den Zustandswechseln. Das funktioniert auch ohne Text-Helfer,
+setzt aber die Logbuch-Integration voraus (bei Standard-Installationen über
+`default_config` immer vorhanden). Die Diagnose ist rein informativ: Ein fehlender
+oder falsch konfigurierter Text-Helfer bringt die Steuerung nie aus dem Tritt.
+
+Technisch meldet jede Fahrt ihren Grund per Event an die eigene Instanz; geschrieben
+wird in einem eigenen, kurzen Lauf der Automation. Diese Läufe tauchen deshalb
+zusätzlich in den Traces auf. Ohne Text-Helfer und ohne Logbuch-Option entfallen sie
+ganz.
+
 ## Bekannte Grenzen
 
 - **Wind-Sensor kurz nicht verfügbar** zählt als "windstill". Bewusste Entscheidung:
@@ -1100,7 +1159,30 @@ Beschattung und Sonnenheizen brauchen kein Nachholen: Ihre 5-Minuten-Durchläufe
   Öffnen fällig (Sonne hoch genug oder "spätestens" erreicht, "frühestens" vorbei),
   holt "Nach Neustart" es bis 2 Stunden nach "spätestens" nach.
 
+- **Diagnose zeigt nur, was diese Automation tut:** Fahrten per Wandtaster, App oder
+  anderer Automation erscheinen nicht — der Text bleibt dann auf der letzten
+  Automatik-Aktion stehen. Auch nicht jede ausgelassene Fahrt wird vermerkt, sondern
+  nur die oben genannten. Unverändert bleibt der Text z. B., wenn der Rollladen schon
+  passend steht, wenn die Beschattung nach einem manuellen Eingriff ruht (sonst würde
+  er alle 5 Minuten überschrieben) und bei Ereignissen während einer Pause —
+  Ausnahmen sind, was auch in der Pause wirkt, z. B. Sturmschutz, Notfall-Öffnen,
+  der "Rollladen schließen"-Knopf und das ausgelassene Zurückfahren nach dem Lüften. Das Nachführen
+  der Beschattung schreibt dagegen bei jeder Bewegung — mit Logbuch-Option also
+  entsprechend viele Einträge.
+- **Moskito-Modus und Fensteröffnen gleichzeitig:** Öffnest du das Fenster nach
+  Sonnenuntergang, laufen die Rollladen-Fahrt und das Ausschalten der Lichter
+  parallel. Im Text-Helfer steht danach der Eintrag, der zuletzt fertig war — das
+  Logbuch zeigt beide.
+
 ## FAQ
+
+**Warum steht der Rollladen so?** Am schnellsten beantwortet das der optionale
+Status-Text-Helfer im Abschnitt "Diagnose" (siehe
+[oben](#diagnose-warum-steht-der-rollladen-so)): Er zeigt die letzte Aktion der
+Automation samt Uhrzeit und Grund, auch wenn sie eine Fahrt bewusst ausgelassen
+hat. Passt die aktuelle Position nicht zu diesem Text, wurde der Rollladen danach
+von Hand oder von etwas anderem bewegt (Ausnahme: ein Moskito-Eintrag, siehe
+Bekannte Grenzen).
 
 **Kann der Rollladen mit Sonnenauf- und -untergang fahren statt zu einer festen
 Uhrzeit?** Ja — "Morgens nach Sonnenstand öffnen" im Abschnitt "Morgens öffnen" und

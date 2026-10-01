@@ -28,6 +28,7 @@ Pro Fenster/Rollladen wird eine eigene Automation erstellt — gemeinsame Helfer
 - Actionable Notifications bei zu lange offenen/gekippten Fenstern
 - Abwesenheitsmodus (schließt, wenn alle weg sind — nur bei geschlossenem Fenster —,
   öffnet beim Heimkommen tagsüber wieder; optional strengere Beschattung)
+- Diagnose: optionaler Text-Helfer zeigt die letzte Aktion samt Grund (optional auch im Logbuch)
 
 Mindestversion: Home Assistant 2024.10.
 
