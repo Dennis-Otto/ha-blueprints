@@ -56,7 +56,7 @@ Fenster, bis der Helfer gesetzt oder das Feature deaktiviert ist.
 | Fenster-Interaktion | Kippen → Lüftungsposition, Öffnen → ganz auf (optional: wie Kippen behandeln); nach dem Schließen zurück in die Ausgangsposition                                          | Fenstersensor (dann immer aktiv)           |
 | Nachtmodus          | Schließt beim Einschalten des Helfers oder zur eigenen Uhrzeit ganz oder auf eine Nachtposition; offene/gekippte Fenster bekommen bis zum Schließen eine Lüftungsposition | `input_boolean` oder Uhrzeit-Helfer        |
 | Sturmschutz         | Fährt bei Starkwind hoch (oder im Panzer-Modus herunter)                                                                                                                  | Wetter-Entität oder Wind-Sensor            |
-| Sonnenschutz        | Beschattet nach Sonnenstand, sodass die Sonne höchstens X m in den Raum fällt; öffnet danach wieder; optional nur bei Freigabe                                            | Status-Helfer, Geometrie, Temperaturquelle |
+| Sonnenschutz        | Beschattet nach Sonnenstand, sodass die Sonne höchstens X m in den Raum fällt; öffnet danach wieder; optional nur bei Freigabe oder im Zeitfenster                        | Status-Helfer, Geometrie, Temperaturquelle |
 | Sonnenheizen        | Öffnet im Winter vergessene Rollos, wenn Sonne ins Fenster scheint und es kalt ist                                                                                        | eigener Status-Helfer, Geometrie           |
 | Frostschutz         | Öffnet bei Frost nur bis zu einer Maximalposition (z. B. 90 %), damit ein festgefrorener Panzer nicht reißt                                                               | Temperaturquelle wie beim Sonnenschutz     |
 | Moskito-Modus       | Schaltet beim Fensteröffnen nach Sonnenuntergang die Lichter im Raum aus (mit Ausnahmen)                                                                                  | Fenstersensor (liefert auch den Bereich)   |
@@ -129,6 +129,26 @@ Aufsetz-Punkt ermitteln = Rollladen langsam herunterfahren, bis der Lichtspalt u
 gerade verschwindet. Netter Nebeneffekt: Die Beschattung fährt dann nie unter den
 Aufsetz-Punkt — die Lamellen bleiben immer offen.
 
+### Zeitfenster für die Beschattung
+
+Mit **"Beschattung frühestens ab"** und **"Beschattung spätestens bis"** (Abschnitt
+Sonnenschutz) lässt sich die Beschattung auf eine Tageszeit begrenzen. Nur innerhalb
+dieses Zeitfensters startet sie und wird der Sonne nachgeführt. Endet das Zeitfenster
+während einer laufenden Beschattung, beendet der nächste Tick sie regulär — genau wie
+beim Verlassen des Sichtfelds: Der Status-Helfer geht aus, und der Rollladen fährt auf
+die "Position nach der Beschattung". Typische Anwendungen:
+
+- **Morgens nicht wecken:** "frühestens ab" auf 09:00 — das Ostfenster im
+  Schlafzimmer fährt nicht schon beim ersten Sonnenstrahl um 6 Uhr herunter.
+- **Abendsonne genießen:** "spätestens bis" auf 18:00 — danach wird nicht mehr
+  beschattet, auch wenn die tiefe Westsonne noch ins Fenster scheint.
+
+Stehen beide Felder auf derselben Uhrzeit (Standard: beide 00:00), gibt es keine
+Einschränkung. Es genügt, nur eines der Felder zu setzen: "bis" auf 00:00 bedeutet
+"bis Mitternacht". Die "bis"-Uhrzeit selbst gehört nicht mehr zum Zeitfenster (bei
+18:00 endet die Beschattung mit dem Tick um 18:00). Liegt "ab" später als "bis",
+reicht das Zeitfenster über Mitternacht. Sonnenheizen ignoriert das Zeitfenster.
+
 ### Manuelle Eingriffe während der Beschattung
 
 Die Automation weiß nie, _wer_ den Rollladen bewegt hat — sie vergleicht bei jedem
@@ -140,8 +160,8 @@ Tick nur die Ist-Position mit ihrem berechneten Sollwert:
   Rollladen wird in Ruhe gelassen.
 
 Diese "Sperre" gilt standardmäßig **bis zum Ende der laufenden Beschattungs-Episode**
-(Sonne verlässt das Sichtfeld, es kühlt ab, der Nachtmodus kommt oder der
-Freigabe-Helfer geht aus). Das Episoden-Ende
+(Sonne verlässt das Sichtfeld, es kühlt ab, das Zeitfenster endet, der Nachtmodus
+kommt oder der Freigabe-Helfer geht aus). Das Episoden-Ende
 öffnet den Rollladen dann regulär — auch über die manuelle Position hinweg. Am
 nächsten Tag beginnt alles bei null; die Anfangsbewegung ist von der Toleranz
 ausgenommen. Stellst du den Rollladen manuell ungefähr dorthin, wo die Beschattung
@@ -415,14 +435,21 @@ geschlossen, bleibt er dort.
 Benachrichtigung wegen fehlendem Status-Helfer? Ist eine Temperaturquelle gesetzt
 (eigener Sensor oder Wetter-Entität im Sturmschutz-Abschnitt)? Liegt die
 Außentemperatur über der Schwelle, steht die Sonne im Sichtfeld (Ausrichtung
-korrekt?) und zwischen minimaler und maximaler Sonnenhöhe, und ist das Fenster nicht
-komplett offen? Ist ein Freigabe-Helfer gesetzt, muss er eingeschaltet sein.
+korrekt?) und zwischen minimaler und maximaler Sonnenhöhe, liegt die Uhrzeit im
+Zeitfenster ("frühestens ab"/"spätestens bis"), und ist das Fenster nicht komplett offen? Ist ein Freigabe-Helfer gesetzt, muss er eingeschaltet sein.
 
 **Über dem Fenster ist ein Balkon oder Vordach — mittags wird trotzdem verdunkelt?**
 Die maximale Sonnenhöhe im Abschnitt "Fenstergeometrie & Sonnenausrichtung" auf den
 Wert setzen, ab dem das Vordach die Glasfläche abschattet (siehe "Sichtfeld und
 Geometrie"). Darüber öffnet der Rollladen auf die Position nach der Beschattung;
 am Nachmittag beschattet die Automation bei Bedarf wieder.
+
+**Der Rollladen fährt morgens zur Beschattung herunter und weckt mich — oder abends,
+obwohl ich die Abendsonne genießen will?** Dafür gibt es im Sonnenschutz-Abschnitt
+das Zeitfenster: "Beschattung frühestens ab" (z. B. 09:00) verhindert den frühen Start,
+"Beschattung spätestens bis" (z. B. 18:00) beendet eine laufende Beschattung zur
+eingestellten Uhrzeit und fährt auf die "Position nach der Beschattung". Details
+unter [Zeitfenster für die Beschattung](#zeitfenster-für-die-beschattung).
 
 **Warum fährt der Rollladen nach dem Lüften zurück?** Beim Öffnen des Fensters merkt
 sich die Automation die Ausgangsposition und stellt sie nach dem Schließen wieder her
