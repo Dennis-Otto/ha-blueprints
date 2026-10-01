@@ -52,7 +52,7 @@ Fenster, bis der Helfer gesetzt oder das Feature deaktiviert ist.
 
 | Feature             | Was es tut                                                                                                                                                                | Voraussetzung                              |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| Morgens öffnen      | Fährt zur eingestellten Uhrzeit auf die Zielposition (nur wenn geschlossener)                                                                                             | `input_datetime`-Helfer (nur Uhrzeit)      |
+| Morgens öffnen      | Fährt zur eingestellten Uhrzeit auf die Zielposition (nur wenn geschlossener) — auf Wunsch sanft in Schritten (Sanftes Wecken)                                            | `input_datetime`-Helfer (nur Uhrzeit)      |
 | Fenster-Interaktion | Kippen → Lüftungsposition, Öffnen → ganz auf/Wunschposition (optional: wie Kippen); beim Schließen zurück; Reaktionszeit wählbar                                          | Fenstersensor (dann immer aktiv)           |
 | Nachtmodus          | Schließt beim Einschalten des Helfers oder zur eigenen Uhrzeit ganz oder auf eine Nachtposition; offene/gekippte Fenster bekommen bis zum Schließen eine Lüftungsposition | `input_boolean` oder Uhrzeit-Helfer        |
 | Zufallsversatz      | Morgens-Öffnen und Nachtmodus fahren zufällig bis zu X Minuten später — wirkt bei Abwesenheit bewohnt                                                                     | — (je ein Regler, Standard 0 = aus)        |
@@ -153,6 +153,59 @@ Einschränkung. Es genügt, nur eines der Felder zu setzen: "bis" auf 00:00 bede
 "bis Mitternacht". Die "bis"-Uhrzeit selbst gehört nicht mehr zum Zeitfenster (bei
 18:00 endet die Beschattung mit dem Tick um 18:00). Liegt "ab" später als "bis",
 reicht das Zeitfenster über Mitternacht. Sonnenheizen ignoriert das Zeitfenster.
+
+### Sanftes Wecken
+
+Gedacht fürs Schlafzimmer: Statt dass es zur Weckzeit schlagartig hell wird, fährt der
+Rollladen über die eingestellte Dauer ("Sanftes Öffnen über" im Abschnitt _Morgens
+öffnen_) in Schritten nach oben — ein Lichtwecker mit echtem Tageslicht. Der erste
+Schritt kommt zur Weckzeit, die Zielposition ist nach Ablauf der Dauer erreicht. Damit
+der Motor nicht im Sekundentakt anläuft, ist jeder Schritt mindestens 5 % groß und es
+gibt höchstens einen pro Minute: Bei 30 Minuten von 0 auf 100 % sind das 20 Schritte zu
+5 %, etwa alle eineinhalb Minuten. 0 Minuten (Standard) öffnet wie bisher in einem Zug.
+
+Gefahren wird von der aktuellen Position bis zur **Zielposition für morgens** — beide
+Einstellungen ergänzen sich. Wer nur bis 60 % wecken möchte, stellt die Zielposition
+auf 60 %. Wie beim normalen Öffnen passiert nichts, wenn der Rollladen schon mindestens
+so weit offen steht.
+
+Das sanfte Öffnen bricht ab, sobald etwas anderes übernimmt — der Rest wird dann nicht
+mehr gefahren:
+
+- Der Rollladen wird zwischen zwei Schritten bewegt (Wandtaster, App, andere
+  Automatik): Die Ist-Position weicht um 5 % oder mehr — also mindestens eine
+  Schrittweite — vom zuletzt befohlenen Schritt ab. Geprüft wird erst, wenn der
+  Rollladen wieder steht.
+- Sturm kommt auf — der Sturmschutz hat Vorrang.
+- Die Pause wird aktiv (nach ihrem Ende wird nicht weitergeweckt).
+- Der Nachtmodus wird wieder eingeschaltet.
+- Das Fenster wird geöffnet oder gekippt — dann übernimmt die Fenster-Interaktion.
+- Die Beschattung setzt ein (heißer Sommermorgen) — sie übernimmt und läuft ganz normal
+  weiter.
+
+War der Nachtmodus beim Start noch an oder das Fenster über Nacht gekippt, stört das
+nicht: Es zählt nur, was sich während des Weckens ändert. Öffnet Sonnenheizen den
+Rollladen, endet das Wecken ebenfalls (die Fahrt zählt als Eingriff) — der Rollladen
+steht dann auf der Sonnenheizen-Position.
+
+Nach einem Abbruch bleibt der Rollladen dort, wo ihn der Eingriff hingefahren hat. Beim
+Fenster heißt das: Wird es während des Weckens gekippt oder geöffnet und später wieder
+geschlossen, fährt die Fenster-Interaktion wie gewohnt auf ihre gemerkte
+Ausgangsposition zurück — typischerweise den zuletzt erreichten Schritt. Der Rest des
+Weckens wird nicht nachgeholt.
+
+Grenzen:
+
+- Ein **Neustart** von Home Assistant oder ein **Neuladen der Automation** (z. B. nach dem
+  Speichern) während des Weckens bricht es ab. Der Rollladen bleibt auf dem zuletzt
+  erreichten Schritt stehen, nachgeholt wird nicht.
+- **Mehrere Instanzen laufen unabhängig:** Wählen mehrere Fenster denselben
+  Uhrzeit-Helfer, starten alle gleichzeitig, jede mit ihrer eigenen Dauer und
+  Zielposition. Ein Eingriff an einem Rollladen bricht nur dessen Wecken ab.
+- Nötig ist ein Rollladen, der seine Position und seinen Fahrzustand verlässlich meldet.
+  Ohne Positionsangabe wird wie bisher in einem Zug geöffnet. Meldet ein Rollladen nach
+  der Fahrt eine deutlich andere Position als befohlen oder bleibt er auf "öffnet"
+  hängen, bricht das Wecken nach dem ersten Schritt ab.
 
 ### Manuelle Eingriffe während der Beschattung
 
@@ -577,6 +630,9 @@ Entwarnung. Ist ein Wind-Sensor gesetzt, entscheidet nur er über die Entwarnung
 - **Mehrere Instanzen würfeln unabhängig:** Jede Instanz zieht ihre eigene Wartezeit.
   Rollläden, die gemeinsam fahren sollen (z. B. eine Fensterfront), lassen sich nicht
   synchron verzögern — dort den Regler auf 0 lassen.
+- **Sanftes Wecken** übersteht keinen Neustart und kein Neuladen der Automation — der
+  Rollladen bleibt auf dem erreichten Zwischenstand (Details unter
+  [Sanftes Wecken](#sanftes-wecken)).
 
 ## FAQ
 
