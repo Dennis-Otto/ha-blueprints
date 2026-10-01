@@ -9,7 +9,9 @@
 **Eine Automation pro Fenster/Rollladen-Paar.** Du legst für jedes Fenster eine eigene
 Instanz aus diesem Blueprint an und wählst dort genau einen Rollladen und genau einen
 Fensterkontakt aus. Als Fensterkontakt funktionieren klassische binäre Sensoren
-(offen/geschlossen) genauso wie Drei-Zustands-Sensoren (offen/gekippt/geschlossen). Gemeinsame Einstellungen — die Uhrzeit fürs
+(offen/geschlossen) genauso wie Drei-Zustands-Sensoren (offen/gekippt/geschlossen) —
+auch solche, die ihre Zustände großgeschrieben melden (`Open`/`Tilted`/`Closed`,
+z. B. Senoro). Gemeinsame Einstellungen — die Uhrzeit fürs
 morgendliche Öffnen, der Nachtmodus-Schalter, die Wetter-Entität — sind Helfer, die du
 einfach in allen Instanzen identisch auswählst.
 
