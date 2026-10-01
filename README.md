@@ -20,6 +20,7 @@ Pro Fenster/Rollladen wird eine eigene Automation erstellt — gemeinsame Helfer
 - Sonnenheizen für die Heizperiode (öffnet vergessene Rollos bei Sonne und Kälte)
 - Moskito-Modus (Licht aus im Raum, wenn das Fenster nach Sonnenuntergang geöffnet wird)
 - Actionable Notifications bei zu lange offenen/gekippten Fenstern
+- Diagnose: optionaler Text-Helfer zeigt die letzte Aktion samt Grund (optional auch im Logbuch)
 
 Mindestversion: Home Assistant 2024.10.
 
