@@ -1080,8 +1080,11 @@ variables:
   night_mode_time: !input night_mode_time
   # Nacht aktiv? Mit Helfer zählt dessen Zustand. Mit Uhrzeit gilt die Nacht ab
   # dieser Uhrzeit bis zur Morgens-Uhrzeit (falls dort ein Helfer gewählt ist),
-  # sonst bis Sonnenaufgang. Ein reiner Auslöser würde nicht reichen: Die Beschattung
-  # würde den gerade geschlossenen Rollladen an einem heißen Abend wieder hochfahren.
+  # sonst bis Sonnenaufgang — vormittags zählt dafür der Sonnenstand, denn next_rising
+  # zeigt nach Sonnenaufgang schon auf morgen (die Nacht liefe sonst ein paar Minuten,
+  # vor der Zeitumstellung eine Stunde zu lang). Ein reiner Auslöser würde nicht
+  # reichen: Die Beschattung würde den gerade geschlossenen Rollladen an einem
+  # heißen Abend wieder hochfahren.
   # Sind beide gesetzt, hat der Helfer Vorrang. Uhrzeiten als HH:MM:SS-Strings
   # vergleichen (die letzten 8 Zeichen passen auch bei Datum+Uhrzeit-Helfern)
   night_mode_on: >-
@@ -1092,11 +1095,13 @@ variables:
       {% set start = states(night_mode_time)[-8:] %}
       {% if morning_time is string and has_value(morning_time) %}
         {% set end = states(morning_time)[-8:] %}
+        {% set sun_up = false %}
       {% else %}
         {% set rising = as_datetime(state_attr('sun.sun', 'next_rising'), none) %}
         {% set end = (rising | as_local).strftime('%H:%M:%S') if rising else start %}
+        {% set sun_up = t < '12:00:00' and is_state('sun.sun', 'above_horizon') %}
       {% endif %}
-      {{ (start <= t < end) if start <= end else (t >= start or t < end) }}
+      {{ ((start <= t < end) if start <= end else (t >= start or t < end)) and not sun_up }}
     {% else %}
       {{ false }}
     {% endif %}
@@ -2420,11 +2425,13 @@ actions:
                   {% set start = states(night_mode_time)[-8:] %}
                   {% if morning_time is string and has_value(morning_time) %}
                     {% set end = states(morning_time)[-8:] %}
+                    {% set sun_up = false %}
                   {% else %}
                     {% set rising = as_datetime(state_attr('sun.sun', 'next_rising'), none) %}
                     {% set end = (rising | as_local).strftime('%H:%M:%S') if rising else start %}
+                    {% set sun_up = t < '12:00:00' and is_state('sun.sun', 'above_horizon') %}
                   {% endif %}
-                  {{ (start <= t < end) if start <= end else (t >= start or t < end) }}
+                  {{ ((start <= t < end) if start <= end else (t >= start or t < end)) and not sun_up }}
                 {% else %}
                   {{ false }}
                 {% endif %}
