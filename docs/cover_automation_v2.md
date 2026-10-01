@@ -53,24 +53,24 @@ Fenster, bis der Helfer gesetzt oder das Feature deaktiviert ist.
 
 ## Die Features im Überblick
 
-| Feature                 | Was es tut                                                                                                                                                                | Voraussetzung                                      |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| Morgens öffnen          | Fährt zur eingestellten Uhrzeit auf die Zielposition (nur wenn geschlossener) — auf Wunsch sanft in Schritten (Sanftes Wecken)                                            | `input_datetime`-Helfer (nur Uhrzeit)              |
-| Fenster-Interaktion     | Kippen → Lüftungsposition, Öffnen → ganz auf/Wunschposition (optional: wie Kippen); beim Schließen zurück; Reaktionszeit wählbar                                          | Fenstersensor (dann immer aktiv)                   |
-| Regenschutz beim Lüften | Fährt bei Regen und gekipptem Fenster auf eine Schutzposition (nur abwärts) und nach dem Regen zurück                                                                     | Regensensor (`binary_sensor` oder `input_boolean`) |
-| Nachtmodus              | Schließt beim Einschalten des Helfers oder zur eigenen Uhrzeit ganz oder auf eine Nachtposition; offene/gekippte Fenster bekommen bis zum Schließen eine Lüftungsposition | `input_boolean` oder Uhrzeit-Helfer                |
-| Zufallsversatz          | Morgens-Öffnen und Nachtmodus fahren zufällig bis zu X Minuten später — wirkt bei Abwesenheit bewohnt                                                                     | — (je ein Regler, Standard 0 = aus)                |
-| Sturmschutz             | Fährt bei Starkwind hoch (oder im Panzer-Modus herunter); optional mit Auslöseverzögerung und Entwarnung nach dem Sturm                                                   | Wetter-Entität oder Wind-Sensor                    |
-| Sonnenschutz            | Beschattet nach Sonnenstand, sodass die Sonne höchstens X m in den Raum fällt; öffnet danach wieder; optional nur bei Freigabe oder im Zeitfenster                        | Status-Helfer, Geometrie, Temperaturquelle         |
-| Sonnenheizen            | Öffnet im Winter vergessene Rollos, wenn Sonne ins Fenster scheint und es kalt ist                                                                                        | eigener Status-Helfer, Geometrie                   |
-| Frostschutz             | Öffnet bei Frost nur bis zu einer Maximalposition (z. B. 90 %), damit ein festgefrorener Panzer nicht reißt                                                               | Temperaturquelle wie beim Sonnenschutz             |
-| Moskito-Modus           | Schaltet beim Fensteröffnen nach Sonnenuntergang die Lichter im Raum aus (mit Ausnahmen)                                                                                  | Fenstersensor (liefert auch den Bereich)           |
-| Benachrichtigungen      | Meldet zu lange offene/gekippte Fenster aufs Handy, mit "Rollladen schließen"-Button; verschwindet automatisch beim Schließen                                             | Fenstersensor, Companion-App-Geräte                |
-| Pausieren               | Hält die komplette Automation an, solange ein Helfer eingeschaltet ist — z.B. während Videoaufnahmen oder wenn Gäste schlafen                                             | `input_boolean`-Helfer (optional)                  |
-| Notfall-Öffnen          | Fährt bei Rauch-/CO-Alarm oder Hagelwarnung sofort ganz auf und hält den Rollladen oben, bis alle Sensoren wieder aus sind                                                | `binary_sensor`/`input_boolean` (optional)         |
-| Hindernis-Sperre        | Fährt nicht nach unten, solange ein Sperr-Sensor an ist (z.B. Fliegengittertür offen, jemand auf der Terrasse); mit Wartezeit                                             | Kontakt-/Präsenzsensor (optional)                  |
-| Nach Neustart           | Holt nach einem HA-Neustart ein verpasstes Morgens-Öffnen (bis 2 h danach) nach bzw. stellt einen aktiven Nachtmodus wieder her                                           | — (Schalter, standardmäßig aus)                    |
-| Abwesenheit             | Schließt, wenn alle weg sind (nur bei geschlossenem Fenster); öffnet beim Heimkommen tagsüber; optional strenger beschatten                                               | Personen, Tracker o. Ä. (Anwesenheit)              |
+| Feature                 | Was es tut                                                                                                                                                                | Voraussetzung                                           |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| Morgens öffnen          | Fährt zur eingestellten Uhrzeit auf die Zielposition (nur wenn geschlossener) — auf Wunsch sanft in Schritten (Sanftes Wecken)                                            | `input_datetime`-Helfer (nur Uhrzeit)                   |
+| Fenster-Interaktion     | Kippen → Lüftungsposition, Öffnen → ganz auf/Wunschposition (optional: wie Kippen); beim Schließen zurück; Reaktionszeit wählbar                                          | Fenstersensor (dann immer aktiv)                        |
+| Regenschutz beim Lüften | Fährt bei Regen und gekipptem Fenster auf eine Schutzposition (nur abwärts) und nach dem Regen zurück                                                                     | Regensensor (`binary_sensor` oder `input_boolean`)      |
+| Nachtmodus              | Schließt beim Einschalten des Helfers oder zur eigenen Uhrzeit ganz oder auf eine Nachtposition; offene/gekippte Fenster bekommen bis zum Schließen eine Lüftungsposition | `input_boolean` oder Uhrzeit-Helfer                     |
+| Zufallsversatz          | Morgens-Öffnen und Nachtmodus fahren zufällig bis zu X Minuten später — wirkt bei Abwesenheit bewohnt                                                                     | — (je ein Regler, Standard 0 = aus)                     |
+| Sturmschutz             | Fährt bei Starkwind hoch (oder im Panzer-Modus herunter); optional mit Auslöseverzögerung und Entwarnung nach dem Sturm                                                   | Wetter-Entität oder Wind-Sensor                         |
+| Sonnenschutz            | Beschattet nach Sonnenstand, sodass die Sonne höchstens X m in den Raum fällt; öffnet danach wieder; optional nur bei Freigabe oder im Zeitfenster                        | Status-Helfer, Geometrie, Temperaturquelle              |
+| Sonnenheizen            | Öffnet im Winter vergessene Rollos, wenn Sonne ins Fenster scheint und es kalt ist                                                                                        | eigener Status-Helfer, Geometrie                        |
+| Frostschutz             | Öffnet bei Frost nur bis zu einer Maximalposition (z. B. 90 %), damit ein festgefrorener Panzer nicht reißt                                                               | Temperaturquelle wie beim Sonnenschutz                  |
+| Moskito-Modus           | Schaltet beim Fensteröffnen nach Sonnenuntergang die Lichter im Raum aus (mit Ausnahmen)                                                                                  | Fenstersensor (liefert auch den Bereich)                |
+| Benachrichtigungen      | Meldet zu lange offene/gekippte Fenster aufs Handy (Schließen-Button, räumt sich selbst ab); optional Erinnerungen, Alexa & Co.                                           | Fenstersensor, Companion-App-Geräte oder Notify-Dienste |
+| Pausieren               | Hält die komplette Automation an, solange ein Helfer eingeschaltet ist — z.B. während Videoaufnahmen oder wenn Gäste schlafen                                             | `input_boolean`-Helfer (optional)                       |
+| Notfall-Öffnen          | Fährt bei Rauch-/CO-Alarm oder Hagelwarnung sofort ganz auf und hält den Rollladen oben, bis alle Sensoren wieder aus sind                                                | `binary_sensor`/`input_boolean` (optional)              |
+| Hindernis-Sperre        | Fährt nicht nach unten, solange ein Sperr-Sensor an ist (z.B. Fliegengittertür offen, jemand auf der Terrasse); mit Wartezeit                                             | Kontakt-/Präsenzsensor (optional)                       |
+| Nach Neustart           | Holt nach einem HA-Neustart ein verpasstes Morgens-Öffnen (bis 2 h danach) nach bzw. stellt einen aktiven Nachtmodus wieder her                                           | — (Schalter, standardmäßig aus)                         |
+| Abwesenheit             | Schließt, wenn alle weg sind (nur bei geschlossenem Fenster); öffnet beim Heimkommen tagsüber; optional strenger beschatten                                               | Personen, Tracker o. Ä. (Anwesenheit)                   |
 
 **Prioritäten:** Ganz oben steht das **Notfall-Öffnen** — meldet ein Notfall-Sensor
 Alarm, fährt der Rollladen hoch und bleibt oben, egal was Sturmschutz, Pause oder
@@ -453,6 +453,55 @@ Binärsensor_) macht daraus einen Regensensor, z. B. mit dem Zustands-Template:
 Genauso lässt sich ein Regenmengen-Sensor einbinden, z. B.
 `{{ states('sensor.regenrate') | float(0) > 0 }}`.
 
+### Benachrichtigungen, Erinnerungen und Zusatz-Dienste
+
+Die erste Meldung kommt, wenn das Fenster länger als die eingestellte Zeit offen
+bzw. gekippt ist (beide Zeiten getrennt einstellbar). Auf dem Handy trägt sie
+einen "Rollladen schließen"-Knopf und verschwindet von selbst, sobald das Fenster
+geschlossen wird.
+
+**Erinnerungen:** Ist "Erinnerung alle X Min. wiederholen" größer als 0, kommt die
+Meldung erneut, solange das Fenster in derselben Stellung bleibt — höchstens so oft
+wie unter "Maximale Anzahl Erinnerungen" eingestellt. Beispiel: offen nach 45
+Minuten, Abstand 15, maximal 3 → Meldungen nach 45, 60, 75 und 90 Minuten. Der Text
+nennt jeweils die aktuelle Dauer ("seit über 75 Minuten offen"). Auf dem Handy
+ersetzt jede Erinnerung die vorherige, der Knopf bleibt. Die Erinnerungen enden:
+
+- **sofort**, wenn das Fenster geschlossen wird,
+- wenn das Fenster von offen auf gekippt wechselt (oder umgekehrt) oder der Sensor
+  kurz aussetzt — für die neue Stellung kommt nach deren eigener Wartezeit wieder
+  eine erste Meldung mit eigenen Erinnerungen,
+- nach der letzten erlaubten Erinnerung.
+
+Der "Rollladen schließen"-Knopf schließt nur den Rollladen — solange das Fenster
+offen bleibt, kommen die Erinnerungen weiter.
+
+Fällt eine Erinnerung in den Schlafmodus oder eine Pause, entfällt sie, zählt aber
+mit; ist danach noch eine übrig, kommt sie ganz normal. Ist der Schlafmodus (oder
+die Pause) schon aktiv, wenn die erste Meldung fällig wird, entfallen die Meldung
+und ihre Erinnerungen ganz — wie bisher.
+
+**Zusatz-Dienste:** Unter "Zusätzliche Benachrichtigungs-Dienste" lassen sich
+weitere Notify-Dienste eintragen, z. B. `notify.alexa_media_kueche`,
+`notify.persistent_notification` oder der Dienst eines Telegram-Bots — mit oder ohne
+`notify.`-Präfix. Integrationen, die statt eines Dienstes eine
+Benachrichtigungs-Entität (`notify.…`) anlegen, funktionieren ebenfalls; die
+Automation erkennt das selbst. Zusatz-Dienste bekommen Titel und Text, bei der
+ersten Meldung und bei jeder Erinnerung, aber keinen Knopf und keine Tag-Daten
+(fremde Dienste kennen sie nicht). Schlafmodus und Pause gelten auch für sie.
+
+Ein falscher Eintrag stört die übrigen Ziele nicht: Einträge im falschen Format
+(Leerzeichen, Umlaute, anderer Bereich als `notify`) werden übersprungen und im
+Home-Assistant-Log als Warnung genannt. Gibt es einen Dienst nicht (Tippfehler),
+steht der Fehler im Log und im Trace — die übrigen Ziele und die Erinnerungen
+laufen weiter. Dafür wird jeder Zusatz-Dienst in einem eigenen, kurzen Lauf der
+Automation bedient; diese Läufe tauchen deshalb zusätzlich in den Traces auf.
+
+Hängen mehrere Rollläden an einem Fenster (mehrere Instanzen mit demselben
+Fenstersensor), meldet jede Instanz für sich. Auf dem Handy ersetzt die zweite
+Meldung dank gleichem Tag die erste, Zusatz-Dienste bekämen die Nachricht aber
+mehrfach — trage sie dann nur in einer der Instanzen ein.
+
 ### Warum die Status-Helfer nötig sind
 
 Blueprints haben keinen eigenen Speicher, und bei Funk-Rollläden lässt sich aus den
@@ -473,7 +522,10 @@ Tracker einer Person zugeordnet, zählt der Status der Person (`person.*`), sons
 des Trackers selbst — gesendet wird nur bei `home`. Geräte ohne Tracker bekommen die
 Meldung weiterhin immer. Das automatische Entfernen der Meldung beim Schließen des
 Fensters geht unabhängig davon an alle Geräte, damit nichts auf einem Handy hängen
-bleibt.
+bleibt. Bei Erinnerungen wird vor jeder Runde neu geprüft — wer inzwischen
+heimgekommen ist, bekommt die nächste Erinnerung; ist gerade niemand zuhause, entfällt
+nur diese Runde. Zusatz-Dienste (Alexa, Telegram …) haben keinen Tracker und werden
+nicht nach Anwesenheit gefiltert.
 
 ### Nachtmodus und Nachtposition
 
@@ -696,9 +748,10 @@ Beschattung und Sonnenheizen brauchen kein Nachholen: Ihre 5-Minuten-Durchläufe
   Windquelle zwischendurch kurz nicht verfügbar ist (dann ist kein echtes Unterschreiten
   belegt). In all diesen Fällen bleibt der Rollladen in der Schutzposition, bis das
   nächste reguläre Ereignis (Nachtmodus, Morgens, Beschattung) ihn übernimmt.
-- **"Nur anwesend" holt nichts nach:** Kommt jemand erst nach Ablauf des Timeouts nach
-  Hause, während das Fenster noch offen ist, gibt es keine nachträgliche Meldung — der
-  Trigger feuert nur einmal.
+- **"Nur anwesend" ohne Erinnerungen holt nichts nach:** Kommt jemand erst nach
+  Ablauf des Timeouts nach Hause, während das Fenster noch offen ist, gibt es keine
+  nachträgliche Meldung — der Trigger feuert nur einmal. Mit Erinnerungen bekommt,
+  wer inzwischen heimgekommen ist, die nächste Erinnerung.
 - **Dauer für manuelle Eingriffe:** Gemessen wird ab der letzten Änderung von Zustand
   oder Attributen des Rollladens (`last_updated`). `last_changed` wäre ungeeignet: Bei
   vielen Covern ändert eine Teilfahrt nur das Attribut `current_position`, der
@@ -841,6 +894,13 @@ Beschattung und Sonnenheizen brauchen kein Nachholen: Ihre 5-Minuten-Durchläufe
   Wetterdienst-Zustände sind oft verzögert und nicht ortsgenau — ein echter
   Regensensor am Haus reagiert deutlich zuverlässiger. Windrichtung und
   Schlagregen werden nicht berücksichtigt.
+- **Zusatz-Dienste werden nicht abgeräumt:** Beim Schließen des Fensters verschwindet
+  nur die Meldung auf den Companion-App-Geräten. Was an Zusatz-Dienste ging
+  (Telegram-Nachricht, dauerhafte Benachrichtigung …), bleibt stehen, und jede
+  Erinnerung kommt dort als eigene Nachricht an.
+- **Erinnerungen überleben keinen Neustart:** Ein Neustart von Home Assistant (ebenso
+  das Speichern dieser Automation) beendet laufende Erinnerungen; sie werden danach
+  nicht fortgesetzt.
 
 ## FAQ
 
@@ -918,7 +978,18 @@ der Morgens-Uhrzeit liegt — Details unter
 
 **Die Fenster-offen-Meldung bleibt auf dem Handy stehen?** Sie verschwindet
 automatisch, sobald das Fenster geschlossen wird — vorausgesetzt, die Companion-App
-ist aktuell (das Aufräumen nutzt `clear_notification` mit Tags).
+ist aktuell (das Aufräumen nutzt `clear_notification` mit Tags). Für Zusatz-Dienste
+gilt das nicht, siehe Bekannte Grenzen.
+
+**Kann ich zusätzlich per Alexa oder Telegram gewarnt werden?** Ja, über
+"Zusätzliche Benachrichtigungs-Dienste" im Abschnitt Benachrichtigungen. Alexa
+(Integration Alexa Media Player): `notify.alexa_media_<gerät>` eintragen, z. B.
+`notify.alexa_media_kueche` — Alexa liest den Text vor, der Titel entfällt dabei.
+Telegram: den Notify-Dienst deines Bots eintragen (z. B. `notify.telegram_familie`)
+oder, falls deine Telegram-Integration eine Benachrichtigungs-Entität pro Chat
+anlegt, deren Entitäts-ID. Den genauen Namen findest du unter _Entwicklerwerkzeuge →
+Aktionen_ (nach "notify." suchen) bzw. bei den Entitäten. Beide bekommen die erste
+Meldung und jede Erinnerung, aber keinen "Rollladen schließen"-Knopf.
 
 **Mein Kontakt kennt nur offen/geschlossen, das Fenster wird aber eigentlich nur
 gekippt?** Dafür gibt es in der Fenster-Interaktion den Schalter "Öffnen wie Kippen
