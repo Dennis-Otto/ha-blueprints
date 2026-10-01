@@ -42,24 +42,27 @@ Fenster, bis der Helfer gesetzt oder das Feature deaktiviert ist.
 
 ## Die Features im Überblick
 
-| Feature             | Was es tut                                                                                                                       | Voraussetzung                              |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| Morgens öffnen      | Fährt zur eingestellten Uhrzeit auf die Zielposition (nur wenn geschlossener)                                                    | `input_datetime`-Helfer (nur Uhrzeit)      |
-| Fenster-Interaktion | Kippen → Lüftungsposition, Öffnen → ganz auf (optional: wie Kippen behandeln); nach dem Schließen zurück in die Ausgangsposition | — (immer aktiv)                            |
-| Nachtmodus          | Schließt beim Einschalten des Helfers; offene/gekippte Fenster bekommen eine Lüftungsposition                                    | `input_boolean`-Helfer                     |
-| Sturmschutz         | Fährt bei Starkwind hoch (oder im Panzer-Modus herunter)                                                                         | Wetter-Entität oder Wind-Sensor            |
-| Sonnenschutz        | Beschattet anhand des Sonnenstands so, dass die Sonne höchstens X m in den Raum fällt; öffnet nach Ende wieder                   | Status-Helfer, Geometrie, Temperaturquelle |
-| Sonnenheizen        | Öffnet im Winter vergessene Rollos, wenn Sonne ins Fenster scheint und es kalt ist                                               | eigener Status-Helfer, Geometrie           |
-| Moskito-Modus       | Schaltet beim Fensteröffnen nach Sonnenuntergang die Lichter im Raum aus (mit Ausnahmen)                                         | — (Bereich kommt vom Fenstersensor)        |
-| Benachrichtigungen  | Meldet zu lange offene/gekippte Fenster aufs Handy, mit "Rollladen schließen"-Button; verschwindet automatisch beim Schließen    | Companion-App-Geräte                       |
-| Pausieren           | Hält die komplette Automation an, solange ein Helfer eingeschaltet ist — z.B. während Videoaufnahmen oder wenn Gäste schlafen    | `input_boolean`-Helfer (optional)          |
+| Feature                 | Was es tut                                                                                                                       | Voraussetzung                                      |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| Morgens öffnen          | Fährt zur eingestellten Uhrzeit auf die Zielposition (nur wenn geschlossener)                                                    | `input_datetime`-Helfer (nur Uhrzeit)              |
+| Fenster-Interaktion     | Kippen → Lüftungsposition, Öffnen → ganz auf (optional: wie Kippen behandeln); nach dem Schließen zurück in die Ausgangsposition | — (immer aktiv)                                    |
+| Regenschutz beim Lüften | Fährt bei Regen und gekipptem Fenster auf eine Schutzposition (nur abwärts) und nach dem Regen zurück                            | Regensensor (`binary_sensor` oder `input_boolean`) |
+| Nachtmodus              | Schließt beim Einschalten des Helfers; offene/gekippte Fenster bekommen eine Lüftungsposition                                    | `input_boolean`-Helfer                             |
+| Sturmschutz             | Fährt bei Starkwind hoch (oder im Panzer-Modus herunter)                                                                         | Wetter-Entität oder Wind-Sensor                    |
+| Sonnenschutz            | Beschattet anhand des Sonnenstands so, dass die Sonne höchstens X m in den Raum fällt; öffnet nach Ende wieder                   | Status-Helfer, Geometrie, Temperaturquelle         |
+| Sonnenheizen            | Öffnet im Winter vergessene Rollos, wenn Sonne ins Fenster scheint und es kalt ist                                               | eigener Status-Helfer, Geometrie                   |
+| Moskito-Modus           | Schaltet beim Fensteröffnen nach Sonnenuntergang die Lichter im Raum aus (mit Ausnahmen)                                         | — (Bereich kommt vom Fenstersensor)                |
+| Benachrichtigungen      | Meldet zu lange offene/gekippte Fenster aufs Handy, mit "Rollladen schließen"-Button; verschwindet automatisch beim Schließen    | Companion-App-Geräte                               |
+| Pausieren               | Hält die komplette Automation an, solange ein Helfer eingeschaltet ist — z.B. während Videoaufnahmen oder wenn Gäste schlafen    | `input_boolean`-Helfer (optional)                  |
 
 **Prioritäten:** Der **Sturmschutz gewinnt immer** — bei Starkwind bewegen weder
 Morgens-Öffnen noch Beschattung, Sonnenheizen oder das Zurückfahren den Rollladen,
 und auch der Pausier-Helfer hält ihn nicht auf (Schutz der Hardware geht vor).
 Danach kommt die Pause (solange ihr Helfer an ist, passiert sonst gar nichts),
-dann der Nachtmodus (nachts wird nicht beschattet, nicht geheizt und beim
-Fensteröffnen nur bis zur Lüftungsposition geöffnet), dann erst die Komfort-Features.
+dann der Regenschutz (bei Regen und gekipptem Fenster fährt nichts über die
+Regenposition), dann der Nachtmodus (nachts wird nicht beschattet, nicht geheizt und
+beim Fensteröffnen nur bis zur Lüftungsposition geöffnet), dann erst die
+Komfort-Features.
 
 ## Verhalten verstehen
 
@@ -103,13 +106,61 @@ verlässt das Sichtfeld, es kühlt ab, oder der Nachtmodus kommt). Das Episoden-
 öffnet den Rollladen dann regulär — auch über die manuelle Position hinweg. Am
 nächsten Tag beginnt alles bei null; die Anfangsbewegung ist von der Toleranz
 ausgenommen. Stellst du den Rollladen manuell ungefähr dorthin, wo die Beschattung
-ihn haben will, übernimmt das Nachführen wieder stillschweigend. Sturm, Lüften und
-Morgens-Öffnen zählen dagegen nicht als manuelle Eingriffe — nach ihnen darf sofort
-wieder beschattet werden.
+ihn haben will, übernimmt das Nachführen wieder stillschweigend. Sturm, Lüften,
+Regenschutz und Morgens-Öffnen zählen dagegen nicht als manuelle Eingriffe — nach
+ihnen darf sofort wieder beschattet werden.
 
 Wer die Beschattung dauerhaft nicht will, deaktiviert den Schalter "Sonnenschutz
 aktivieren" in der Instanz — der Status-Helfer ist **kein** Ausschalter, er ist das
 interne Gedächtnis der Automation und stellt sich bei Handbetätigung einfach zurück.
+
+### Regenschutz beim Lüften
+
+Mit einem Regensensor (binärer Sensor oder `input_boolean`, "an" = Regen) schützt die
+Automation gekippte Fenster vor hereinlaufendem Regen — praktisch, wenn im Sommer die
+ganze Nacht über gelüftet wird. Ohne Regensensor ist das Feature aus.
+
+- **Regen beginnt:** Meldet der Sensor mindestens die eingestellte Verzögerung lang
+  Regen (Standard 2 Minuten) und ist das Fenster gekippt, merkt sich die Automation
+  die aktuelle Position und fährt auf die Regenposition (Standard 10 %). Es wird nur
+  heruntergefahren — steht der Rollladen schon tiefer, bleibt er, wo er ist.
+- **Fenster wird bei Regen gekippt:** Der Rollladen fährt nicht zum Lüften hoch;
+  steht er über der Regenposition, fährt er auf die Regenposition herunter (gemerkt
+  wird die Position vor dem Kippen). Eine so ausgelassene Kipp-Position wird nach dem
+  Regen nicht nachgeholt.
+- **Regen vorbei:** Ist es lange genug trocken (Standard 15 Minuten) und das Fenster
+  noch gekippt, fährt der Rollladen auf die gemerkte Position zurück. Bei aktivem
+  Nachtmodus, Sturm oder Pause bleibt er in der Regenposition. Kurze Regenpausen
+  innerhalb der Trocken-Dauer überschreiben die gemerkte Position nicht.
+- **Fenster wird vorher geschlossen:** Die gemerkte Position wird verworfen, das
+  Zurückfahren übernimmt die normale Fenster-Interaktion (innerhalb ihres
+  Zeitfensters, siehe Bekannte Grenzen).
+
+Standardmäßig gilt das nur für gekippte Fenster (bzw. offene mit "Öffnen wie Kippen
+behandeln"). Mit "Auch bei ganz geöffnetem Fenster" greift der Regenschutz auch bei
+komplett geöffnetem Fenster — für Balkon- und Terrassentüren nicht empfohlen,
+Aussperr-Gefahr!
+
+Solange der Regenschutz greift, fährt kein anderes Feature den Rollladen darüber
+hinaus: Beschattung und Sonnenheizen ruhen (ihr Sonnenstand ist reine Geometrie und
+sagt nichts über echten Sonnenschein), der Nachtmodus fährt höchstens auf die
+Regenposition, und das Morgens-Öffnen wird vorgemerkt — beim Zurückfahren nach dem
+Regen geht es dann direkt auf die Morgen-Position. Die Regenfahrt zählt nicht als
+manueller Eingriff in die Beschattung. Der Sturmschutz hat Vorrang: Bei Starkwind
+fährt der Regenschutz nicht herunter (außer im Panzer-Modus, dort ist Herunterfahren
+ohnehin die Schutzrichtung). Regnet es beim Ende einer Pause, wird der Regenschutz
+nachgeholt.
+
+**Kein Regensensor, aber eine Wetter-Entität?** Ein Template-Binärsensor
+(_Einstellungen → Geräte & Dienste → Helfer → Helfer erstellen → Template →
+Binärsensor_) macht daraus einen Regensensor, z. B. mit dem Zustands-Template:
+
+```jinja
+{{ states('weather.home') in ['rainy', 'pouring', 'lightning-rainy', 'snowy-rainy', 'hail'] }}
+```
+
+Genauso lässt sich ein Regenmengen-Sensor einbinden, z. B.
+`{{ states('sensor.regenrate') | float(0) > 0 }}`.
 
 ### Warum die Status-Helfer nötig sind
 
@@ -129,11 +180,28 @@ die Einmal-Logik des Sonnenheizens und die Eingriffs-Erkennung auf.
   (z. B. Regen ↔ Starkregen), beendet erst Sonnenstand oder Temperatur die
   Beschattung. Der Filter beendet nur bei mindestens 10 Minuten stabil schlechter Lage.
 - **Cover ohne Positions-Angabe** (nur auf/zu): Morgens-Öffnen funktioniert,
-  Kipp-Position und Beschattung werden übersprungen — sie brauchen Positionsdaten.
+  Kipp-Position, Beschattung und Regenschutz werden übersprungen — sie brauchen
+  Positionsdaten.
 - **Windgeschwindigkeit** wird roh mit dem Grenzwert verglichen — liefert deine Quelle
   m/s statt km/h, muss der Grenzwert entsprechend gesetzt werden.
 - **Sturm-Ende:** Nach dem Sturm bleibt der Rollladen in der Schutzposition, bis das
   nächste reguläre Ereignis (Nachtmodus, Morgens, Beschattung) ihn übernimmt.
+- **Regenschutz und Neustart:** Die Position von vor dem Regen wird in einer
+  dynamischen Szene gemerkt und überlebt keinen Home-Assistant-Neustart. Nach einem
+  Neustart während des Regens bleibt der Rollladen nach dem Regen in der
+  Regenposition.
+- **Fenster während des Regens geschlossen:** Die gemerkte Position wird verworfen.
+  Liegt das Kippen schon länger zurück als das Zeitfenster fürs Zurückfahren, bleibt
+  der Rollladen in der Regenposition, bis das nächste reguläre Ereignis ihn
+  übernimmt. Dasselbe gilt, wenn der Regen nachts oder während Sturm/Pause endet.
+- **Morgens-Öffnen bei Regen** wird nur nachgeholt, wenn "Nach dem Regen
+  zurückfahren" aktiv ist; sonst entfällt es, solange der Regenschutz greift.
+- **Regensensor-Typen:** Ausgewertet wird nur an/aus eines `binary_sensor` oder
+  `input_boolean`. Regenmengen-Sensoren (mm/h) oder die Wetter-Entität (Zustand
+  `rainy`, `pouring` usw.) über einen Template-Binärsensor einbinden (siehe oben).
+  Wetterdienst-Zustände sind oft verzögert und nicht ortsgenau — ein echter
+  Regensensor am Haus reagiert deutlich zuverlässiger. Windrichtung und
+  Schlagregen werden nicht berücksichtigt.
 
 ## FAQ
 
@@ -185,5 +253,6 @@ greift weiterhin, und der "Rollladen schließen"-Knopf einer Benachrichtigung
 funktioniert wie der Wandtaster — bewusste Befehle werden nicht blockiert.
 Praktisch für Videoaufnahmen (konstantes Licht!), schlafende Gäste oder den
 Fensterputzer. Beim Ausschalten holt die Automation einen inzwischen aktiven
-Nachtmodus nach und bewertet die Beschattung neu; verpasste Einzelereignisse
-(morgendliches Öffnen, Zurückfahren nach dem Lüften) werden nicht nachgeholt.
+Nachtmodus nach, stellt bei Regen den Regenschutz her und bewertet die Beschattung
+neu; verpasste Einzelereignisse (morgendliches Öffnen, Zurückfahren nach dem Lüften)
+werden nicht nachgeholt.
