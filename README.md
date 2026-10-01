@@ -19,6 +19,7 @@ Pro Fenster/Rollladen wird eine eigene Automation erstellt — gemeinsame Helfer
   mit Hysterese, optionaler Wetterlagen-Filter und Freigabe-Helfer, erkennt manuelle
   Eingriffe)
 - Sonnenheizen für die Heizperiode (öffnet vergessene Rollos bei Sonne und Kälte)
+- Frostschutz (öffnet bei Frost nur bis zu einer Maximalposition, z. B. 90 %)
 - Moskito-Modus (Licht aus im Raum, wenn das Fenster nach Sonnenuntergang geöffnet wird)
 - Actionable Notifications bei zu lange offenen/gekippten Fenstern
 
