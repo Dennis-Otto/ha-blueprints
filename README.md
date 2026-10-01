@@ -16,7 +16,8 @@ Pro Fenster/Rollladen wird eine eigene Automation erstellt — gemeinsame Helfer
 - Nachtmodus inkl. Lüftungsposition bei offenem Fenster
 - Sturmschutz (Wetter-Entität oder Wind-Sensor, optionaler Panzer-Modus) — hat immer Vorrang
 - Sonnenschutz/Beschattung anhand des Sonnenstands (Fenster-Geometrie, Temperatur-Schwelle
-  mit Hysterese, optionaler Wetterlagen-Filter, erkennt manuelle Eingriffe)
+  mit Hysterese, optionaler Wetterlagen-Filter, optionaler Blendschutz auch bei Kälte,
+  erkennt manuelle Eingriffe)
 - Sonnenheizen für die Heizperiode (öffnet vergessene Rollos bei Sonne und Kälte)
 - Moskito-Modus (Licht aus im Raum, wenn das Fenster nach Sonnenuntergang geöffnet wird)
 - Actionable Notifications bei zu lange offenen/gekippten Fenstern
