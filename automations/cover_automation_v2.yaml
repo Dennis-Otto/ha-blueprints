@@ -557,6 +557,64 @@ blueprint:
               step: 1
               mode: slider
               unit_of_measurement: "%"
+    frost_protection_section:
+      name: Frostschutz
+      description: >
+        Bei Frost kann der Rollladenpanzer im Kasten oder in den Führungsschienen
+        festfrieren. Fährt der Motor dann ganz hoch, reißt er am Panzer — Gurt,
+        Aufhängung oder Lamellen können Schaden nehmen. Der Frostschutz begrenzt
+        deshalb bei Frost die automatischen Öffnungsfahrten auf eine maximale
+        Position: morgens öffnen, Öffnen beim Fensteröffnen, die Position nach der
+        Beschattung und Sonnenheizen. Der Sturmschutz fährt bewusst weiterhin ganz
+        hoch, weil ein teilweise heruntergelassener Panzer im Wind flattert.
+      icon: mdi:snowflake-alert
+      collapsed: true
+      input:
+        frost_enabled:
+          name: Frostschutz aktivieren
+          description: >
+            Nutzt dieselbe Temperaturquelle wie Sonnenschutz und Sonnenheizen: den
+            Außentemperatur-Sensor aus dem Abschnitt "Sonnenschutz" bzw., wenn dort
+            keiner gesetzt ist, die Temperatur der Wetter-Entität aus dem Abschnitt
+            "Sturmschutz" — beides wirkt auch, wenn diese Features selbst
+            deaktiviert sind. Ohne verfügbare Temperatur greift der Frostschutz
+            nicht, der Rollladen öffnet dann wie gewohnt. Deaktiviert (Standard) =
+            bisheriges Verhalten ohne Begrenzung.
+          default: false
+          selector:
+            boolean: {}
+        frost_temp_threshold:
+          name: Temperatur-Schwelle
+          description: >
+            Der Frostschutz greift, wenn die Außentemperatur bei oder unter diesem
+            Wert liegt. Ein kleiner Puffer über 0 °C (z.B. 2 °C) fängt Raureif und
+            geschützt hängende Sensoren ab. Geprüft wird nur im Moment einer
+            Öffnungsfahrt — eine Hysterese ist deshalb nicht nötig.
+          default: 0
+          selector:
+            number:
+              min: -15
+              max: 10
+              step: 0.5
+              mode: slider
+              unit_of_measurement: °C
+        frost_max_position:
+          name: Maximale Öffnungsposition bei Frost
+          description: >
+            Weiter als bis zu dieser Position (in %) öffnet die Automatik bei Frost
+            nicht — der Panzer wird nicht bis zum Anschlag in den Kasten gezogen.
+            Kipp- und Nachtlüftungs-Position werden nicht begrenzt (sie liegen
+            normalerweise deutlich darunter), ebenso wenig das Zurückfahren nach
+            dem Lüften. ⚠️ Rollläden ohne Positions-Angabe (nur auf/zu) lassen sich
+            nicht begrenzen und öffnen auch bei Frost ganz.
+          default: 90
+          selector:
+            number:
+              min: 50
+              max: 100
+              step: 1
+              mode: slider
+              unit_of_measurement: "%"
     mosquito_section:
       name: Moskito-Modus
       description: >
@@ -827,6 +885,24 @@ variables:
   solar_heating_temp_hysteresis: !input solar_heating_temp_hysteresis
   solar_heating_min_position: !input solar_heating_min_position
   solar_heating_position: !input solar_heating_position
+  frost_enabled: !input frost_enabled
+  frost_temp_threshold: !input frost_temp_threshold
+  frost_max_position: !input frost_max_position
+  # Frost = Frostschutz an, Temperaturquelle (dieselbe wie Sonnenschutz/
+  # Sonnenheizen) verfügbar und Temperatur <= Schwelle. Ohne Quelle oder bei
+  # unavailable kein Frost — Öffnungsfahrten laufen dann unbegrenzt wie bisher
+  frost_active: >-
+    {% if not frost_enabled %}
+      {{ false }}
+    {% elif shading_temp_sensor is string %}
+      {{ has_value(shading_temp_sensor)
+         and states(shading_temp_sensor) | float(99) <= frost_temp_threshold }}
+    {% elif weather_entity is string %}
+      {{ has_value(weather_entity)
+         and state_attr(weather_entity, 'temperature') | float(99) <= frost_temp_threshold }}
+    {% else %}
+      {{ false }}
+    {% endif %}
   mosquito_area_input: !input mosquito_area
   mosquito_exclude: !input mosquito_exclude
   pause_boolean: !input pause_boolean
@@ -975,18 +1051,23 @@ actions:
                 {% else %}
                   0
                 {% endif %}
+              # Frostschutz: bei Frost höchstens bis zur Frost-Position öffnen
+              morning_target: >-
+                {{ [morning_position | int, frost_max_position | int] | min if frost_active
+                   else morning_position | int }}
           - condition: "{{ not storm_enabled or (wind_now | float(0)) < wind_speed_threshold }}"
           - choose:
               - conditions:
                   - "{{ state_attr(cover_entity, 'current_position') is not none }}"
-                  - "{{ state_attr(cover_entity, 'current_position') | int(101) < morning_position }}"
+                  - "{{ state_attr(cover_entity, 'current_position') | int(101) < morning_target }}"
                 sequence:
                   - action: cover.set_cover_position
                     target:
                       entity_id: !input cover
                     data:
-                      position: !input morning_position
-              # Fallback für Cover ohne Positions-Attribut
+                      position: "{{ morning_target }}"
+              # Fallback für Cover ohne Positions-Attribut (kann auch bei Frost
+              # nicht begrenzen, open_cover fährt immer ganz auf)
               - conditions:
                   - "{{ state_attr(cover_entity, 'current_position') is none }}"
                 sequence:
@@ -1063,6 +1144,8 @@ actions:
           - if:
               - "{{ not panzer_mode }}"
             then:
+              # Bewusst ohne Frost-Begrenzung: Bei Sturm ist der ganz eingefahrene
+              # Panzer sicherer als ein teilweise offener, der im Wind flattert
               - action: cover.open_cover
                 target:
                   entity_id: !input cover
@@ -1289,7 +1372,10 @@ actions:
                     target:
                       entity_id: !input cover
                     data:
-                      position: !input shading_end_position
+                      # Frostschutz: bei Frost höchstens bis zur Frost-Position
+                      position: >-
+                        {{ [shading_end_position | int, frost_max_position | int] | min if frost_active
+                           else shading_end_position | int }}
 
       # --- SONNENHEIZEN (Winter) ---
       - conditions:
@@ -1371,7 +1457,10 @@ actions:
                     target:
                       entity_id: !input cover
                     data:
-                      position: !input solar_heating_position
+                      # Frostschutz: bei Frost höchstens bis zur Frost-Position
+                      position: >-
+                        {{ [solar_heating_position | int, frost_max_position | int] | min if frost_active
+                           else solar_heating_position | int }}
               # Sonnenheizen beenden: nur Status zurücksetzen, kein erzwungenes Schließen —
               # der Rollladen bleibt offen, bis Nachtmodus/Fenster-Interaktion ihn regulär bewegen
               - conditions:
@@ -1532,9 +1621,24 @@ actions:
                   # Bei aktiver erzwungener Beschattung bleibt der Rollladen unten
                   - "{{ not (force_shading and shading_status_helper is string and is_state(shading_status_helper, 'on')) }}"
                 sequence:
-                  - action: cover.open_cover
-                    target:
-                      entity_id: !input cover
+                  # Frostschutz: bei Frost nur bis zur Frost-Position statt ganz auf,
+                  # ein schon weiter offener Rollladen bleibt stehen. Cover ohne
+                  # Positions-Attribut können nur ganz öffnen
+                  - if:
+                      - "{{ frost_active and state_attr(cover_entity, 'current_position') is not none }}"
+                    then:
+                      - if:
+                          - "{{ state_attr(cover_entity, 'current_position') | int(101) < frost_max_position }}"
+                        then:
+                          - action: cover.set_cover_position
+                            target:
+                              entity_id: !input cover
+                            data:
+                              position: !input frost_max_position
+                    else:
+                      - action: cover.open_cover
+                        target:
+                          entity_id: !input cover
                   # Beschattungs-Status freigeben: Das Öffnen fürs Lüften ist kein
                   # manueller Eingriff — nach dem Schließen (oder Timeout) darf der
                   # nächste Tick wieder beschatten, statt bis Tagesende zu pausieren

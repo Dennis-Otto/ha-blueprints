@@ -50,6 +50,7 @@ Fenster, bis der Helfer gesetzt oder das Feature deaktiviert ist.
 | Sturmschutz         | Fährt bei Starkwind hoch (oder im Panzer-Modus herunter)                                                                         | Wetter-Entität oder Wind-Sensor            |
 | Sonnenschutz        | Beschattet anhand des Sonnenstands so, dass die Sonne höchstens X m in den Raum fällt; öffnet nach Ende wieder                   | Status-Helfer, Geometrie, Temperaturquelle |
 | Sonnenheizen        | Öffnet im Winter vergessene Rollos, wenn Sonne ins Fenster scheint und es kalt ist                                               | eigener Status-Helfer, Geometrie           |
+| Frostschutz         | Öffnet bei Frost nur bis zu einer Maximalposition (z. B. 90 %), damit ein festgefrorener Panzer nicht reißt                      | Temperaturquelle wie beim Sonnenschutz     |
 | Moskito-Modus       | Schaltet beim Fensteröffnen nach Sonnenuntergang die Lichter im Raum aus (mit Ausnahmen)                                         | — (Bereich kommt vom Fenstersensor)        |
 | Benachrichtigungen  | Meldet zu lange offene/gekippte Fenster aufs Handy, mit "Rollladen schließen"-Button; verschwindet automatisch beim Schließen    | Companion-App-Geräte                       |
 | Pausieren           | Hält die komplette Automation an, solange ein Helfer eingeschaltet ist — z.B. während Videoaufnahmen oder wenn Gäste schlafen    | `input_boolean`-Helfer (optional)          |
@@ -60,6 +61,8 @@ und auch der Pausier-Helfer hält ihn nicht auf (Schutz der Hardware geht vor).
 Danach kommt die Pause (solange ihr Helfer an ist, passiert sonst gar nichts),
 dann der Nachtmodus (nachts wird nicht beschattet, nicht geheizt und beim
 Fensteröffnen nur bis zur Lüftungsposition geöffnet), dann erst die Komfort-Features.
+Der **Frostschutz** ist keine eigene Fahrt, sondern eine Obergrenze für deren
+Öffnungsfahrten — den Sturmschutz begrenzt er bewusst nicht.
 
 ## Verhalten verstehen
 
@@ -120,6 +123,39 @@ Wandtaster kam (die Positions-Rückmeldung kommt immer vom Gerät selbst). Ein
 neustartfest zu speichern — und genau darauf bauen das automatische Wiederöffnen,
 die Einmal-Logik des Sonnenheizens und die Eingriffs-Erkennung auf.
 
+### Frostschutz
+
+Bei Frost kann der Panzer im Kasten oder in den Führungsschienen festfrieren — fährt
+der Motor dann ganz hoch, reißt er daran. Mit aktiviertem Frostschutz öffnet die
+Automatik deshalb höchstens bis zur Frost-Position (Standard 90 %), solange die
+Außentemperatur bei oder unter der Schwelle liegt (Standard 0 °C). Das betrifft:
+
+- **Morgens öffnen:** Ziel ist der kleinere Wert aus Zielposition und Frost-Position;
+  gefahren wird weiterhin nur, wenn der Rollladen tiefer steht.
+- **Fenster öffnen:** Der Rollladen fährt auf die Frost-Position statt ganz auf —
+  steht er schon höher, bleibt er stehen.
+- **Ende der Beschattung** und **Sonnenheizen:** Die jeweilige Zielposition wird auf
+  die Frost-Position begrenzt.
+
+Die Temperatur kommt aus derselben Quelle wie bei Sonnenschutz und Sonnenheizen: dem
+Außentemperatur-Sensor im Sonnenschutz-Abschnitt, sonst dem `temperature`-Attribut der
+Wetter-Entität im Sturmschutz-Abschnitt. Beide Felder wirken auch, wenn Sonnenschutz
+bzw. Sturmschutz selbst ausgeschaltet sind. Ist keine Quelle gesetzt oder gerade nicht
+verfügbar, greift der Frostschutz nicht.
+
+Eine Hysterese braucht es nicht: Die Temperatur wird nur im Moment einer Öffnungsfahrt
+geprüft, es gibt keinen Dauerzustand, der beim Über- oder Unterschreiten der Schwelle
+nachgefahren würde. Pendelt die Temperatur um die Schwelle, entscheidet sie nur, ob die
+nächste Öffnung an der Frost-Position oder an der normalen Zielposition endet — ein
+Auf und Ab entsteht dadurch nicht. Umgekehrt holt die Automation nach dem Frost nichts
+nach: Der Rollladen bleibt auf der Frost-Position, bis ihn das nächste reguläre
+Ereignis bewegt.
+
+Der **Sturmschutz** fährt auch bei Frost ganz hoch. Ein teilweise heruntergelassener
+Panzer bietet dem Wind Angriffsfläche und schlägt in den Schienen, der eingefahrene
+Panzer ist im Kasten geschützt — Schutz vor Wind hat Vorrang. Im Panzer-Modus
+(schließen bei Sturm) stellt sich die Frage ohnehin nicht.
+
 ## Bekannte Grenzen
 
 - **Wind-Sensor kurz nicht verfügbar** zählt als "windstill". Bewusste Entscheidung:
@@ -130,6 +166,13 @@ die Einmal-Logik des Sonnenheizens und die Eingriffs-Erkennung auf.
   Beschattung. Der Filter beendet nur bei mindestens 10 Minuten stabil schlechter Lage.
 - **Cover ohne Positions-Angabe** (nur auf/zu): Morgens-Öffnen funktioniert,
   Kipp-Position und Beschattung werden übersprungen — sie brauchen Positionsdaten.
+  Auch der Frostschutz kann solche Cover nicht begrenzen: Öffnen heißt hier immer
+  ganz auf.
+- **Frostschutz:** Kipp- und Nachtlüftungs-Position werden nicht begrenzt (sie liegen
+  normalerweise weit unter der Frost-Position), ebenso wenig das Zurückfahren nach dem
+  Lüften (es stellt nur die Position von vorher wieder her). Auch die Nachführung der
+  Beschattung bleibt unbegrenzt — sie startet erst ab der Beschattungs-Schwelle
+  (mindestens 10 °C). Ohne verfügbare Temperaturquelle greift der Frostschutz nicht.
 - **Windgeschwindigkeit** wird roh mit dem Grenzwert verglichen — liefert deine Quelle
   m/s statt km/h, muss der Grenzwert entsprechend gesetzt werden.
 - **Sturm-Ende:** Nach dem Sturm bleibt der Rollladen in der Schutzposition, bis das
@@ -142,7 +185,7 @@ Home-Assistant-Konvention: 100 % = ganz offen, 0 % = ganz geschlossen. Die Proze
 sind dabei die Werte deines Cover-Aktors, also Motor-Laufweg — nicht zwingend
 Glasfläche. Für die Beschattung lässt sich dieser Unterschied über die
 Glas-Kalibrierung (siehe oben) ausgleichen; alle anderen Positions-Eingaben
-(morgens, Kipp-Position, Nachtlüftung) sind bewusst direkte Aktor-Werte.
+(morgens, Kipp-Position, Nachtlüftung, Frost-Position) sind bewusst direkte Aktor-Werte.
 
 **Die Beschattung tut nichts — warum?** Prüfe in dieser Reihenfolge: Gibt es eine
 Benachrichtigung wegen fehlendem Status-Helfer? Ist eine Temperaturquelle gesetzt
