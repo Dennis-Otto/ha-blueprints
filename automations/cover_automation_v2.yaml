@@ -323,6 +323,27 @@ blueprint:
                   label: "🌨️ Schneeregen"
                 - value: exceptional
                   label: "⚠️ Außergewöhnlich"
+        shading_enable_entity:
+          name: Freigabe-Helfer (optional)
+          description: >
+            Wenn gesetzt, beschattet die Automation nur, solange diese Entität
+            eingeschaltet ("on") ist — gesteuert z.B. von einer eigenen
+            Wetter-/Prognose-Automation, einem Dashboard-Schalter oder einem
+            Zeitplan-Helfer. Wechselt sie auf "aus", endet eine laufende
+            Beschattung sofort regulär (Fahrt auf die "Position nach der
+            Beschattung"); ist sie nicht verfügbar, wird deswegen weder gestartet
+            noch beendet. Fenster-Interaktion, Nachtmodus, Sturmschutz, Sonnenheizen
+            und Benachrichtigungen sind davon unabhängig. Derselbe Helfer kann in
+            mehreren Instanzen gewählt werden (z.B. einer pro Fassade). Leer
+            lassen, um ohne externe Freigabe zu beschatten (bisheriges Verhalten).
+          default: []
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - input_boolean
+                    - binary_sensor
+                    - schedule
         window_height:
           name: Fensterhöhe
           description: Höhe der Glasfläche in Metern.
@@ -933,6 +954,7 @@ variables:
   shading_override_duration: !input shading_override_duration
   force_shading: !input force_shading
   shading_weather_states: !input shading_weather_states
+  shading_enable_entity: !input shading_enable_entity
   solar_heating_status_helper: !input solar_heating_status_helper
   solar_heating_temp_threshold: !input solar_heating_temp_threshold
   solar_heating_temp_hysteresis: !input solar_heating_temp_hysteresis
@@ -1060,6 +1082,16 @@ triggers:
     id: close_shutter_action
   - trigger: time_pattern
     minutes: "/5"
+    id: shading_tick
+    enabled: !input shading_enabled
+  # Freigabe entzogen: Beschattung sofort beenden statt erst beim nächsten Tick.
+  # Gleiche ID wie der Tick, der Sonnenschutz-Zweig bewertet ohnehin alles neu.
+  # Nur on → off: unavailable/unknown heißt "Zustand halten", ein späteres off
+  # übernimmt der Tick. Ohne Freigabe-Helfer ([]) feuert der Trigger nie
+  - trigger: state
+    entity_id: !input shading_enable_entity
+    from: "on"
+    to: "off"
     id: shading_tick
     enabled: !input shading_enabled
   - trigger: time_pattern
@@ -1367,12 +1399,22 @@ actions:
                    and states(weather_entity) not in ['unknown', 'unavailable']
                    and states(weather_entity) not in shading_weather_states
                    and (as_timestamp(now()) - as_timestamp(states[weather_entity].last_changed)) > 600 }}
+              # Externe Freigabe: ohne Freigabe-Helfer immer erlaubt (Altverhalten).
+              # Starten/Nachführen nur bei 'on', Beenden nur bei 'off' — wie bei der
+              # Temperaturquelle heißt unavailable/unknown "Zustand halten"
+              enable_ok: >-
+                {{ shading_enable_entity is not string
+                   or is_state(shading_enable_entity, 'on') }}
+              enable_off: >-
+                {{ shading_enable_entity is string
+                   and is_state(shading_enable_entity, 'off') }}
           - choose:
               # Beschattung starten / der Sonne nachführen
               - conditions:
                   - "{{ sun_in_window and outdoor_temp >= shading_temp_threshold }}"
                   - "{{ storm_ok }}"
                   - "{{ weather_ok }}"
+                  - "{{ enable_ok }}"
                   - "{{ not night_mode_on }}"
                   - "{{ force_shading or treat_open_as_tilted or window_state not in ['on', 'open'] }}"
                 sequence:
@@ -1443,7 +1485,8 @@ actions:
                   - >-
                     {{ (not sun_in_window)
                        or (temp_available and outdoor_temp <= (shading_temp_threshold - shading_temp_hysteresis))
-                       or weather_bad_stable }}
+                       or weather_bad_stable
+                       or enable_off }}
                   - "{{ not night_mode_on }}"
                 sequence:
                   - action: input_boolean.turn_off
