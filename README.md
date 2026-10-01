@@ -11,9 +11,9 @@ A collection of Home Assistant automation blueprints.
 Pro Fenster/Rollladen wird eine eigene Automation erstellt — gemeinsame Helfer
 (Uhrzeit, Nachtmodus) wählen alle Instanzen identisch aus.
 
-- Morgens öffnen (input_datetime-Helfer, abschaltbar)
+- Morgens öffnen (input_datetime-Helfer oder nach Sonnenstand mit frühestens/spätestens, abschaltbar)
 - Fenster-Interaktion (offen/gekippt → Position, mit Rückfahr-Logik)
-- Nachtmodus inkl. Lüftungsposition bei offenem Fenster
+- Nachtmodus per Helfer, eigener Uhrzeit oder Sonnenstand, inkl. Lüftungsposition bei offenem Fenster
 - Sturmschutz (Wetter-Entität oder Wind-Sensor, optionaler Panzer-Modus) — hat immer Vorrang
 - Sonnenschutz/Beschattung anhand des Sonnenstands (Fenster-Geometrie, Temperatur-Schwelle
   mit Hysterese, optionaler Wetterlagen-Filter, erkennt manuelle Eingriffe)

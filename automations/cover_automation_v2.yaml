@@ -53,12 +53,17 @@ blueprint:
                 - domain: sensor
     morning_section:
       name: Morgens öffnen
-      description: Einstellungen für das automatische Öffnen am Morgen.
+      description: >
+        Einstellungen für das automatische Öffnen am Morgen — zu einer festen Uhrzeit
+        oder nach Sonnenstand mit frühestens/spätestens.
       icon: mdi:weather-sunset-up
       collapsed: true
       input:
         morning_enabled:
           name: Morgens öffnen aktivieren
+          description: >
+            Hauptschalter für das morgendliche Öffnen — gilt für die Uhrzeit und
+            ebenso für "Morgens nach Sonnenstand öffnen".
           default: true
           selector:
             boolean: {}
@@ -66,7 +71,9 @@ blueprint:
           name: Uhrzeit für morgendliches Hochfahren
           description: >
             Ein input_datetime-Helfer mit der Uhrzeit für das Hochfahren
-            (erforderlich, wenn "Morgens öffnen" aktiviert ist).
+            (erforderlich, wenn "Morgens öffnen" aktiviert ist). Mit "Morgens nach
+            Sonnenstand öffnen" gilt diese Uhrzeit stattdessen als "frühestens" und
+            ist optional — ohne Helfer gibt es dann keine Untergrenze.
             Wichtig: einen Helfer, der NUR eine Uhrzeit enthält (ohne Datum) —
             ein Datum+Uhrzeit-Helfer feuert nur ein einziges Mal an genau diesem
             Datum und danach nie wieder. In allen Blueprint-Instanzen denselben
@@ -75,6 +82,41 @@ blueprint:
           selector:
             entity:
               domain: input_datetime
+        morning_sun_enabled:
+          name: Morgens nach Sonnenstand öffnen
+          description: >
+            Statt zur festen Uhrzeit öffnet der Rollladen, sobald die Sonne die
+            eingestellte Höhe (nächstes Feld) überschreitet — im Sommer also früher,
+            im Winter später. Die "Uhrzeit für morgendliches Hochfahren" oben gilt
+            dann als "frühestens", "Spätestens öffnen um" als Obergrenze. Pro Tag wird
+            genau einmal geöffnet. "Morgens öffnen aktivieren" muss eingeschaltet sein.
+          default: false
+          selector:
+            boolean: {}
+        morning_sun_elevation:
+          name: Sonnenhöhe zum Öffnen
+          description: >
+            Sonnenhöhe (Elevation in Grad), ab der morgens geöffnet wird.
+            0° ≈ Sonnenaufgang, negative Werte = schon in der Morgendämmerung
+            (−6° = Beginn der bürgerlichen Dämmerung), positive Werte = erst, wenn die
+            Sonne etwas höher steht. Nur mit "Morgens nach Sonnenstand öffnen".
+          default: 0
+          selector:
+            number:
+              min: -6
+              max: 15
+              step: 0.5
+              mode: slider
+              unit_of_measurement: °
+        morning_latest:
+          name: Spätestens öffnen um
+          description: >
+            Hat die Sonne die eingestellte Höhe bis zu dieser Uhrzeit noch nicht
+            erreicht (z.B. im Winter), öffnet der Rollladen spätestens jetzt.
+            Nur mit "Morgens nach Sonnenstand öffnen".
+          default: "09:00:00"
+          selector:
+            time: {}
         morning_position:
           name: Zielposition für morgens
           description: >
@@ -598,8 +640,8 @@ blueprint:
     night_mode_section:
       name: Nachtmodus
       description: >
-        Schließen der Rollläden bei Nacht — entweder über einen gemeinsamen Helfer
-        oder über eine eigene Uhrzeit für dieses Fenster. Nur eines von beiden setzen.
+        Schließen der Rollläden bei Nacht — über einen gemeinsamen Helfer, über eine
+        eigene Uhrzeit für dieses Fenster oder nach Sonnenstand. Nur eines davon nutzen.
       icon: mdi:weather-night
       collapsed: true
       input:
@@ -608,8 +650,8 @@ blueprint:
           description: >
             Ein input_boolean-Helfer. Wird er eingeschaltet, fährt der Rollladen für
             die Nacht herunter. Leer lassen, wenn kein Nachtmodus gewünscht ist oder
-            stattdessen die Nachtmodus-Uhrzeit (nächstes Feld) genutzt wird.
-            In allen Blueprint-Instanzen denselben Helfer auswählen.
+            stattdessen die Nachtmodus-Uhrzeit bzw. der Sonnenstand (folgende Felder)
+            genutzt wird. In allen Blueprint-Instanzen denselben Helfer auswählen.
           default: []
           selector:
             entity:
@@ -621,14 +663,63 @@ blueprint:
             Uhrzeit, zu der dieser Rollladen für die Nacht herunterfährt — z.B. wenn
             ein Fenster früher schließen soll als der Rest. Die Nacht gilt dann bis
             zur Uhrzeit für morgendliches Hochfahren (sofern dort ein Helfer gewählt
-            ist), sonst bis Sonnenaufgang. Nur EINES von beiden setzen: Helfer oder
-            Uhrzeit. Sind beide gewählt, gilt der Helfer, und eine dauerhafte
-            Benachrichtigung in Home Assistant weist darauf hin.
+            ist), sonst bis Sonnenaufgang. Nur EINE Nacht-Quelle nutzen: Helfer,
+            Uhrzeit oder Sonnenstand. Sind mehrere gesetzt, gilt Helfer vor Uhrzeit
+            vor Sonnenstand, und eine dauerhafte Benachrichtigung in Home Assistant
+            weist darauf hin.
             Wichtig: einen Helfer, der NUR eine Uhrzeit enthält (ohne Datum).
           default: []
           selector:
             entity:
               domain: input_datetime
+        night_sun_enabled:
+          name: Nachtmodus nach Sonnenstand
+          description: >
+            Dritte Alternative zu Helfer und Uhrzeit: Die Nacht beginnt, sobald die
+            Sonne abends unter die eingestellte Höhe sinkt — aber nie vor
+            "frühestens" und spätestens zu "spätestens" (Felder unten). Der Rollladen
+            schließt pro Abend genau einmal. Die Nacht gilt dann bis zur Uhrzeit für
+            morgendliches Hochfahren (sofern dort ein Helfer gewählt ist), sonst bis
+            Sonnenaufgang. Nur EINE Nacht-Quelle nutzen; sind mehrere gesetzt, gilt
+            Helfer vor Uhrzeit vor Sonnenstand, und eine dauerhafte Benachrichtigung
+            in Home Assistant weist darauf hin.
+          default: false
+          selector:
+            boolean: {}
+        night_sun_elevation:
+          name: Sonnenhöhe für Nachtmodus
+          description: >
+            Sonnenhöhe (Elevation in Grad), unter der abends die Nacht beginnt.
+            0° ≈ Sonnenuntergang, −3° ≈ mitten in der Abenddämmerung, −6° = Ende der
+            bürgerlichen Dämmerung (draußen wird es dunkel). Positive Werte schließen
+            schon vor Sonnenuntergang. Nur mit "Nachtmodus nach Sonnenstand".
+          default: -3
+          selector:
+            number:
+              min: -12
+              max: 10
+              step: 0.5
+              mode: slider
+              unit_of_measurement: °
+        night_earliest:
+          name: Nachtmodus frühestens um
+          description: >
+            Vor dieser Uhrzeit beginnt die Nacht nie, auch wenn die Sonne (z.B. im
+            Winter) schon tiefer steht — dann schließt der Rollladen genau zu dieser
+            Uhrzeit. Nur mit "Nachtmodus nach Sonnenstand".
+          default: "18:00:00"
+          selector:
+            time: {}
+        night_latest:
+          name: Nachtmodus spätestens um
+          description: >
+            Ist die Sonne bis zu dieser Uhrzeit noch nicht unter die eingestellte Höhe
+            gesunken (z.B. im Hochsommer), beginnt die Nacht spätestens jetzt. Darf
+            auch kurz nach Mitternacht liegen (z.B. 00:30), aber nicht erst in der
+            Morgendämmerung. Nur mit "Nachtmodus nach Sonnenstand".
+          default: "22:30:00"
+          selector:
+            time: {}
         night_ventilation_position:
           name: Nachtposition bei offenem Fenster
           description: >
@@ -812,19 +903,69 @@ variables:
   reclose_timeout: !input reclose_timeout
   force_close: !input force_close
   treat_open_as_tilted: !input treat_open_as_tilted
+  morning_enabled: !input morning_enabled
   morning_time: !input morning_time
+  morning_sun_enabled: !input morning_sun_enabled
+  morning_sun_elevation: !input morning_sun_elevation
+  morning_latest: !input morning_latest
   morning_position: !input morning_position
   night_mode_boolean: !input night_mode_boolean
   night_mode_time: !input night_mode_time
+  night_sun_enabled: !input night_sun_enabled
+  night_sun_elevation: !input night_sun_elevation
+  night_earliest: !input night_earliest
+  night_latest: !input night_latest
+  # Morgens nach Sonnenstand schon fällig (Sonne hoch genug oder "spätestens"
+  # erreicht)? Ohne Morgens-Helfer endet die Nacht dann bereits, auch wenn die
+  # Sonne noch nicht aufgegangen ist — sonst wäre der Rollladen offen, während noch
+  # Nacht gilt, und das Schließen des Fensters würde ihn wieder herunterfahren
+  morning_open_due: >-
+    {{ morning_enabled and morning_sun_enabled
+       and (state_attr('sun.sun', 'elevation') | float(-90) > morning_sun_elevation
+            or now().strftime('%H:%M:%S') >= today_at(morning_latest).strftime('%H:%M:%S')) }}
+  # Nachtmodus nach Sonnenstand, Bausteine für Zustand und Auslöser: Die Nacht
+  # läuft von "frühestens" bis zum Morgen (Ende wie bei der Nachtmodus-Uhrzeit,
+  # siehe unten) und ist aktiv, sobald die Sonne darin unter der Schwelle steht
+  # oder "spätestens" erreicht ist. Fenster als [Beginn, Ende), auch über
+  # Mitternacht. after_latest zählt "spätestens" selbst nicht mit — so schließt
+  # der Sonnen-Auslöser auch, wenn er in dieselbe Sekunde fällt. Beim
+  # Sonnen-Auslöser zählt die Uhrzeit des Sonnen-Updates, nicht die des (evtl.
+  # verzögerten) Laufs. Fehlt next_rising, gilt Mittag als Ende — so schließt
+  # "spätestens" auch ohne Sonnendaten
+  night_sun: >-
+    {% if night_sun_enabled %}
+      {% set t = (trigger.to_state.last_updated | as_local).strftime('%H:%M:%S')
+         if trigger.id | default('') == 'night_close_sun' else now().strftime('%H:%M:%S') %}
+      {% set e = today_at(night_earliest).strftime('%H:%M:%S') %}
+      {% set l = today_at(night_latest).strftime('%H:%M:%S') %}
+      {% if morning_time is string and has_value(morning_time) %}
+        {% set end = states(morning_time)[-8:] %}
+        {% set sun_up = false %}
+      {% else %}
+        {% set rising = as_datetime(state_attr('sun.sun', 'next_rising'), none) %}
+        {% set end = (rising | as_local).strftime('%H:%M:%S') if rising else '12:00:00' %}
+        {% set sun_up = t < '12:00:00' and (is_state('sun.sun', 'above_horizon') or morning_open_due) %}
+      {% endif %}
+      {% set elev = state_attr('sun.sun', 'elevation') %}
+      {% set low = elev is number and elev < night_sun_elevation %}
+      {% set after_e = (e <= t < end) if e <= end else (t >= e or t < end) %}
+      {% set after_l = (l <= t < end) if l <= end else (t >= l or t < end) %}
+      {{ {'night': after_e and (low or after_l) and not sun_up,
+          'sun_low': low, 'after_latest': after_l and t != l} }}
+    {% else %}
+      {{ {'night': false, 'sun_low': false, 'after_latest': false} }}
+    {% endif %}
   # Nacht aktiv? Mit Helfer zählt dessen Zustand. Mit Uhrzeit gilt die Nacht ab
   # dieser Uhrzeit bis zur Morgens-Uhrzeit (falls dort ein Helfer gewählt ist),
   # sonst bis Sonnenaufgang — vormittags zählt dafür der Sonnenstand, denn next_rising
   # zeigt nach Sonnenaufgang schon auf morgen (die Nacht liefe sonst ein paar Minuten,
-  # vor der Zeitumstellung eine Stunde zu lang). Ein reiner Auslöser würde nicht
+  # vor der Zeitumstellung eine Stunde zu lang) — bzw. bis zum früheren Öffnen nach
+  # Sonnenstand (morning_open_due). Ein reiner Auslöser würde nicht
   # reichen: Die Beschattung würde den gerade geschlossenen Rollladen an einem
   # heißen Abend wieder hochfahren.
-  # Sind beide gesetzt, hat der Helfer Vorrang. Uhrzeiten als HH:MM:SS-Strings
-  # vergleichen (die letzten 8 Zeichen passen auch bei Datum+Uhrzeit-Helfern)
+  # Vorrang bei mehreren Quellen: Helfer vor Uhrzeit vor Sonnenstand. Uhrzeiten als
+  # HH:MM:SS-Strings vergleichen (die letzten 8 Zeichen passen auch bei
+  # Datum+Uhrzeit-Helfern)
   night_mode_on: >-
     {% if night_mode_boolean is string %}
       {{ is_state(night_mode_boolean, 'on') }}
@@ -837,9 +978,11 @@ variables:
       {% else %}
         {% set rising = as_datetime(state_attr('sun.sun', 'next_rising'), none) %}
         {% set end = (rising | as_local).strftime('%H:%M:%S') if rising else start %}
-        {% set sun_up = t < '12:00:00' and is_state('sun.sun', 'above_horizon') %}
+        {% set sun_up = t < '12:00:00' and (is_state('sun.sun', 'above_horizon') or morning_open_due) %}
       {% endif %}
       {{ ((start <= t < end) if start <= end else (t >= start or t < end)) and not sun_up }}
+    {% elif night_sun_enabled and night_mode_time is not string %}
+      {{ night_sun.night }}
     {% else %}
       {{ false }}
     {% endif %}
@@ -915,6 +1058,18 @@ triggers:
     at: !input morning_time
     id: morning_open
     enabled: !input morning_enabled
+  # Morgens nach Sonnenstand: Sonne steigt über die Schwelle bzw. "spätestens" ist
+  # erreicht. Ob wirklich geöffnet wird, entscheidet der Morgens-Zweig
+  - trigger: numeric_state
+    entity_id: sun.sun
+    attribute: elevation
+    above: !input morning_sun_elevation
+    id: morning_open_sun
+    enabled: !input morning_sun_enabled
+  - trigger: time
+    at: !input morning_latest
+    id: morning_open_latest
+    enabled: !input morning_sun_enabled
   - trigger: state
     entity_id: !input window_sensor
     to:
@@ -968,6 +1123,22 @@ triggers:
   - trigger: time
     at: !input night_mode_time
     id: night_close_time
+  # Nachtmodus nach Sonnenstand: Sonne sinkt unter die Schwelle, "frühestens" oder
+  # "spätestens" ist erreicht. Welcher davon schließt, entscheidet der Nachtmodus-Zweig
+  - trigger: numeric_state
+    entity_id: sun.sun
+    attribute: elevation
+    below: !input night_sun_elevation
+    id: night_close_sun
+    enabled: !input night_sun_enabled
+  - trigger: time
+    at: !input night_earliest
+    id: night_close_sun_earliest
+    enabled: !input night_sun_enabled
+  - trigger: time
+    at: !input night_latest
+    id: night_close_sun_latest
+    enabled: !input night_sun_enabled
   - trigger: numeric_state
     entity_id: !input weather_entity
     attribute: wind_speed
@@ -1014,8 +1185,41 @@ actions:
       # --- MORGENS ÖFFNEN ---
       - conditions:
           - condition: trigger
-            id: morning_open
+            id:
+              - morning_open
+              - morning_open_sun
+              - morning_open_latest
         sequence:
+          # Nach Sonnenstand pro Tag genau einmal öffnen: "frühestens" (morning_open)
+          # nur, wenn die Sonne schon hoch genug steht; der Sonnen-Auslöser nur
+          # zwischen frühestens und spätestens; "spätestens" nur, wenn die Sonne die
+          # Höhe noch nicht erreicht hat. Grenzen inklusiv: Fallen Sonnen-Update und
+          # Uhrzeit in dieselbe Sekunde, öffnen notfalls beide (harmlos), statt keiner;
+          # beim Sonnen-Auslöser zählt dafür die Uhrzeit des Sonnen-Updates.
+          # Ohne Helfer gibt es kein "frühestens" ('' liegt vor jeder Uhrzeit); liegt
+          # "frühestens" nicht vor "spätestens", gilt "frühestens". "Morgens öffnen
+          # aktivieren" bleibt Hauptschalter (enabled: wertet nur einen Input aus)
+          - condition: >-
+              {% if not morning_sun_enabled %}
+                {{ true }}
+              {% elif not morning_enabled %}
+                {{ false }}
+              {% else %}
+                {% set elev = state_attr('sun.sun', 'elevation') %}
+                {% set reached = elev is number and elev > morning_sun_elevation %}
+                {% set t = (trigger.to_state.last_updated | as_local).strftime('%H:%M:%S')
+                   if trigger.id == 'morning_open_sun' else now().strftime('%H:%M:%S') %}
+                {% set l = today_at(morning_latest).strftime('%H:%M:%S') %}
+                {% set e = states(morning_time)[-8:]
+                   if morning_time is string and has_value(morning_time) else '' %}
+                {% if trigger.id == 'morning_open' %}
+                  {{ reached or e >= l }}
+                {% elif trigger.id == 'morning_open_sun' %}
+                  {{ e <= t <= l }}
+                {% else %}
+                  {{ not reached and e < l }}
+                {% endif %}
+              {% endif %}
           # Sturm hat immer Vorrang: bei Starkwind wird morgens nicht bewegt
           # (im Panzer-Modus wäre das Öffnen direkt kontraproduktiv)
           - variables:
@@ -1060,27 +1264,50 @@ actions:
             id:
               - night_close
               - night_close_time
+              - night_close_sun
+              - night_close_sun_earliest
+              - night_close_sun_latest
         sequence:
-          # Fehlkonfiguration laut machen: Blueprints können "nur eines von beiden"
-          # nicht im Formular erzwingen. Sind Helfer UND Uhrzeit gesetzt, gilt der
-          # Helfer — der Uhrzeit-Trigger bewegt dann nichts
+          - variables:
+              sun_trigger: >-
+                {{ trigger.id in ['night_close_sun', 'night_close_sun_earliest', 'night_close_sun_latest'] }}
+          # Fehlkonfiguration laut machen: Blueprints können "nur eine Quelle" nicht
+          # im Formular erzwingen. Vorrang: Helfer vor Uhrzeit vor Sonnenstand — die
+          # Auslöser der nachrangigen Quellen bewegen dann nichts
           - if:
-              - "{{ night_mode_boolean is string and night_mode_time is string }}"
+              - "{{ [night_mode_boolean is string, night_mode_time is string, night_sun_enabled] | select | list | count > 1 }}"
             then:
               - action: persistent_notification.create
                 data:
                   notification_id: "rollladen_nachtmodus_doppelt_{{ cover_entity | slugify }}"
-                  title: "Rollladensteuerung: Nachtmodus doppelt konfiguriert"
+                  title: "Rollladensteuerung: Nachtmodus mehrfach konfiguriert"
                   message: >-
+                    {%- set sources = [] -%}
+                    {%- if night_mode_boolean is string %}{% set sources = sources + ['Nachtmodus-Helfer'] %}{% endif -%}
+                    {%- if night_mode_time is string %}{% set sources = sources + ['Nachtmodus-Uhrzeit'] %}{% endif -%}
+                    {%- if night_sun_enabled %}{% set sources = sources + ['Nachtmodus nach Sonnenstand'] %}{% endif -%}
                     Für "{{ state_attr(cover_entity, 'friendly_name') or cover_entity }}"
-                    sind Nachtmodus-Helfer UND Nachtmodus-Uhrzeit ausgewählt — es darf
-                    nur eines von beiden gesetzt sein. Bis dahin gilt der Helfer, die
-                    Uhrzeit wird ignoriert. Bitte in der Automation eines der beiden
-                    Felder leeren.
+                    sind mehrere Nachtmodus-Quellen gesetzt ({{ sources | join(', ') }})
+                    — es darf nur eine davon gesetzt sein. Bis dahin gilt
+                    "{{ sources[0] }}", die übrigen werden ignoriert (Vorrang: Helfer
+                    vor Uhrzeit vor Sonnenstand). Bitte in der Automation die übrigen
+                    Felder leeren bzw. "Nachtmodus nach Sonnenstand" ausschalten.
               - if:
-                  - "{{ trigger.id == 'night_close_time' }}"
+                  - >-
+                    {{ (trigger.id == 'night_close_time' and night_mode_boolean is string)
+                       or (sun_trigger and (night_mode_boolean is string or night_mode_time is string)) }}
                 then:
-                  - stop: "Nachtmodus-Helfer und -Uhrzeit gesetzt — der Helfer hat Vorrang"
+                  - stop: "Mehrere Nachtmodus-Quellen gesetzt — dieser Auslöser hat keinen Vorrang"
+          # Nachtmodus nach Sonnenstand: pro Abend genau einmal schließen, und zwar nur
+          # mit dem Auslöser, mit dem die Nacht gerade beginnt — "frühestens", wenn die
+          # Sonne schon tief steht; der Sonnen-Auslöser bis einschließlich "spätestens";
+          # "spätestens" nur, wenn die Sonne noch nicht tief genug steht
+          - condition: >-
+              {{ not sun_trigger
+                 or (night_sun.night
+                     and (trigger.id == 'night_close_sun_earliest'
+                          or (trigger.id == 'night_close_sun' and not night_sun.after_latest)
+                          or (trigger.id == 'night_close_sun_latest' and not night_sun.sun_low))) }}
           # Beschattungs-Status zurücksetzen: Die Nacht beendet die Beschattung,
           # sonst springt der Rollladen morgens beim ersten Tick auf die End-Position
           - if:
@@ -1642,7 +1869,12 @@ actions:
           # Zustand NACH dem Warten neu bewerten — währenddessen können Nachtmodus
           # oder Sturm aktiv geworden sein, dann darf der Snapshot nicht zurückgeholt werden
           - variables:
-              # Gleiche Logik wie night_mode_on oben, aber mit der Uhrzeit von jetzt
+              # Gleiche Logik wie morning_open_due, night_mode_on und night_sun oben,
+              # aber mit Uhrzeit und Sonnenstand von jetzt
+              morning_open_due_now: >-
+                {{ morning_enabled and morning_sun_enabled
+                   and (state_attr('sun.sun', 'elevation') | float(-90) > morning_sun_elevation
+                        or now().strftime('%H:%M:%S') >= today_at(morning_latest).strftime('%H:%M:%S')) }}
               night_mode_on_now: >-
                 {% if night_mode_boolean is string %}
                   {{ is_state(night_mode_boolean, 'on') }}
@@ -1655,9 +1887,26 @@ actions:
                   {% else %}
                     {% set rising = as_datetime(state_attr('sun.sun', 'next_rising'), none) %}
                     {% set end = (rising | as_local).strftime('%H:%M:%S') if rising else start %}
-                    {% set sun_up = t < '12:00:00' and is_state('sun.sun', 'above_horizon') %}
+                    {% set sun_up = t < '12:00:00' and (is_state('sun.sun', 'above_horizon') or morning_open_due_now) %}
                   {% endif %}
                   {{ ((start <= t < end) if start <= end else (t >= start or t < end)) and not sun_up }}
+                {% elif night_sun_enabled and night_mode_time is not string %}
+                  {% set t = now().strftime('%H:%M:%S') %}
+                  {% set e = today_at(night_earliest).strftime('%H:%M:%S') %}
+                  {% set l = today_at(night_latest).strftime('%H:%M:%S') %}
+                  {% if morning_time is string and has_value(morning_time) %}
+                    {% set end = states(morning_time)[-8:] %}
+                    {% set sun_up = false %}
+                  {% else %}
+                    {% set rising = as_datetime(state_attr('sun.sun', 'next_rising'), none) %}
+                    {% set end = (rising | as_local).strftime('%H:%M:%S') if rising else '12:00:00' %}
+                    {% set sun_up = t < '12:00:00' and (is_state('sun.sun', 'above_horizon') or morning_open_due_now) %}
+                  {% endif %}
+                  {% set elev = state_attr('sun.sun', 'elevation') %}
+                  {% set low = elev is number and elev < night_sun_elevation %}
+                  {% set after_e = (e <= t < end) if e <= end else (t >= e or t < end) %}
+                  {% set after_l = (l <= t < end) if l <= end else (t >= l or t < end) %}
+                  {{ after_e and (low or after_l) and not sun_up }}
                 {% else %}
                   {{ false }}
                 {% endif %}
