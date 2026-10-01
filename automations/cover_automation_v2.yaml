@@ -23,7 +23,7 @@ blueprint:
   input:
     assignment_section:
       name: Zuordnung
-      description: Der Rollladen und der zugehörige Fenstersensor.
+      description: Der Rollladen und (optional) der zugehörige Fenstersensor.
       icon: mdi:vector-link
       input:
         cover:
@@ -33,7 +33,7 @@ blueprint:
             entity:
               domain: cover
         window_sensor:
-          name: Fenstersensor
+          name: Fenstersensor (optional)
           description: >
             Der Fensterkontakt zu diesem Rollladen. Unterstützt werden klassische
             binäre Fensterkontakte (offen/geschlossen) ebenso wie
@@ -41,6 +41,13 @@ blueprint:
             Kontakte erscheinen in der Auswahl nur mit passender Geräteklasse
             (Tür, Fenster, Öffnung oder Garagentor) — die lässt sich in den
             Einstellungen der Entität nachrüsten.
+            Leer lassen bei Festverglasung bzw. Fenstern, die sich nicht öffnen
+            lassen: Das Fenster gilt dann immer als geschlossen; Fenster-Interaktion
+            (Kippen/Öffnen/Zurückfahren), Benachrichtigungen und Moskito-Modus
+            entfallen. ⚠️ Nicht für Balkon- oder Terrassentüren ohne Kontakt —
+            Nachtmodus, Beschattung und Panzer-Modus fahren dann auch bei offener
+            Tür herunter (Aussperr-Gefahr!).
+          default: []
           selector:
             entity:
               filter:
@@ -90,7 +97,7 @@ blueprint:
               unit_of_measurement: "%"
     window_interaction_section:
       name: Fenster-Interaktion
-      description: Wie der Rollladen auf geöffnete oder gekippte Fenster reagiert.
+      description: Wie der Rollladen auf geöffnete oder gekippte Fenster reagiert. Benötigt einen Fenstersensor.
       icon: mdi:window-open-variant
       collapsed: true
       input:
@@ -562,6 +569,7 @@ blueprint:
       description: >
         Schaltet die Lichter im Raum aus, wenn das Fenster nach Einbruch der Dunkelheit
         geöffnet oder gekippt wird — damit das Licht keine Insekten anlockt.
+        Benötigt einen Fenstersensor.
       icon: mdi:bug
       collapsed: true
       input:
@@ -756,6 +764,7 @@ blueprint:
       description: >
         Benachrichtigungen bei zu lange offenem oder gekipptem Fenster. Wird das
         Fenster geschlossen, verschwindet die Meldung automatisch vom Gerät.
+        Benötigt einen Fenstersensor.
       icon: mdi:bell
       collapsed: true
       input:
@@ -820,6 +829,12 @@ max: 20
 variables:
   cover_entity: !input cover
   window_sensor: !input window_sensor
+  # Fensterzustand in Kleinschreibung: manche Drei-Zustands-Sensoren (z.B. Senoro)
+  # melden Open/Tilted/Closed. Wird zu Laufbeginn ausgewertet — nach einem Wait
+  # den Zustand direkt neu lesen. Ohne Fenstersensor (Festverglasung) gilt das
+  # Fenster immer als geschlossen — states() auf der leeren Liste würde sonst
+  # jeden Lauf abbrechen
+  window_state: "{{ (states(window_sensor) | lower) if window_sensor is string else 'closed' }}"
   tilted_position: !input tilted_position
   reclose_timeout: !input reclose_timeout
   force_close: !input force_close
@@ -901,8 +916,9 @@ variables:
   notification_timeout_tilted: !input notification_timeout_tilted
   notification_device: !input notification_device
   notify_only_when_home: !input notify_only_when_home
-  action_id: "{{ 'CLOSE_SHUTTER__' ~ window_sensor }}"
-  notification_tag: "{{ 'fenster_offen_' ~ (window_sensor | slugify) }}"
+  # Ohne Fenstersensor gibt es keine Meldungen — 'none' ist dann nur Platzhalter
+  action_id: "{{ 'CLOSE_SHUTTER__' ~ (window_sensor if window_sensor is string else 'none') }}"
+  notification_tag: "{{ 'fenster_offen_' ~ ((window_sensor if window_sensor is string else 'none') | slugify) }}"
   device_name_map: >
     {% set ns = namespace(device_names=[]) %}
     {% for device_id in notification_device %}
@@ -923,12 +939,16 @@ triggers:
     at: !input morning_time
     id: morning_open
     enabled: !input morning_enabled
+  # Großgeschriebene Varianten für Sensoren, die Open/Tilted/Closed melden.
+  # Ohne Fenstersensor (leere Liste) feuern die Fenster-Trigger nie
   - trigger: state
     entity_id: !input window_sensor
     to:
       - "on"
       - "open"
+      - "Open"
       - "tilted"
+      - "Tilted"
     for:
       seconds: 2
     id: window_change
@@ -937,12 +957,15 @@ triggers:
     to:
       - "on"
       - "open"
+      - "Open"
     for:
       minutes: !input notification_timeout
     id: window_open_long
   - trigger: state
     entity_id: !input window_sensor
-    to: "tilted"
+    to:
+      - "tilted"
+      - "Tilted"
     for:
       minutes: !input notification_timeout_tilted
     id: window_tilted_long
@@ -951,6 +974,7 @@ triggers:
     to:
       - "off"
       - "closed"
+      - "Closed"
     for:
       seconds: 2
     id: window_closed
@@ -990,7 +1014,7 @@ triggers:
   - trigger: event
     event_type: mobile_app_notification_action
     event_data:
-      action: "CLOSE_SHUTTER__{{ window_sensor_tv }}"
+      action: "CLOSE_SHUTTER__{{ window_sensor_tv if window_sensor_tv is string else 'none' }}"
     id: close_shutter_action
   - trigger: time_pattern
     minutes: "/5"
@@ -1005,7 +1029,9 @@ triggers:
     to:
       - "on"
       - "open"
+      - "Open"
       - "tilted"
+      - "Tilted"
     for:
       seconds: 2
     id: mosquito_lights
@@ -1107,7 +1133,7 @@ actions:
                   entity_id: "{{ solar_heating_status_helper }}"
           - choose:
               - conditions:
-                  - "{{ states(window_sensor) == 'tilted' or (treat_open_as_tilted and states(window_sensor) in ['on', 'open']) }}"
+                  - "{{ window_state == 'tilted' or (treat_open_as_tilted and window_state in ['on', 'open']) }}"
                 sequence:
                   - action: cover.set_cover_position
                     target:
@@ -1115,7 +1141,7 @@ actions:
                     data:
                       position: !input tilted_position
               - conditions:
-                  - "{{ states(window_sensor) in ['on', 'open'] }}"
+                  - "{{ window_state in ['on', 'open'] }}"
                 sequence:
                   - action: cover.set_cover_position
                     target:
@@ -1131,7 +1157,7 @@ actions:
       - conditions:
           - condition: trigger
             id: storm_detected
-          - "{{ force_storm_action or states(window_sensor) in ['off', 'closed'] }}"
+          - "{{ force_storm_action or window_state in ['off', 'closed'] }}"
         sequence:
           # Beschattungs-Status zurücksetzen: Die Sturm-Bewegung darf nicht als
           # manueller Eingriff gewertet werden — sobald der Wind nachlässt, soll
@@ -1196,7 +1222,7 @@ actions:
             then:
               - choose:
                   - conditions:
-                      - "{{ states(window_sensor) == 'tilted' or (treat_open_as_tilted and states(window_sensor) in ['on', 'open']) }}"
+                      - "{{ window_state == 'tilted' or (treat_open_as_tilted and window_state in ['on', 'open']) }}"
                     sequence:
                       - action: cover.set_cover_position
                         target:
@@ -1204,7 +1230,7 @@ actions:
                         data:
                           position: !input tilted_position
                   - conditions:
-                      - "{{ states(window_sensor) in ['on', 'open'] }}"
+                      - "{{ window_state in ['on', 'open'] }}"
                     sequence:
                       - action: cover.set_cover_position
                         target:
@@ -1302,7 +1328,7 @@ actions:
                   - "{{ storm_ok }}"
                   - "{{ weather_ok }}"
                   - "{{ not night_mode_on }}"
-                  - "{{ force_shading or treat_open_as_tilted or states(window_sensor) not in ['on', 'open'] }}"
+                  - "{{ force_shading or treat_open_as_tilted or window_state not in ['on', 'open'] }}"
                 sequence:
                   - variables:
                       # Höhe (über dem Boden), auf der ein Sonnenstrahl die Fensterebene
@@ -1318,7 +1344,7 @@ actions:
                         {% set p = (a + glass_free * (b - a) / 100) | round(0) | int %}
                         {% set p = [p, shading_min_position | int] | max %}
                         {% set p = [p, 100] | min %}
-                        {% if states(window_sensor) in ['tilted', 'on', 'open'] %}
+                        {% if window_state in ['tilted', 'on', 'open'] %}
                           {{ [p, tilted_position | int] | max }}
                         {% else %}
                           {{ p }}
@@ -1479,7 +1505,8 @@ actions:
           - variables:
               mosquito_area: >-
                 {{ mosquito_area_input if mosquito_area_input is string and mosquito_area_input
-                   else area_id(window_sensor) }}
+                   else area_id(window_sensor) if window_sensor is string
+                   else none }}
               lights_to_turn_off: >-
                 {% if mosquito_area %}
                   {{ expand(area_entities(mosquito_area))
@@ -1504,6 +1531,9 @@ actions:
               - window_tilted_long
           - "{{ not (sleep_mode_boolean is string and is_state(sleep_mode_boolean, 'on')) }}"
           - "{{ device_name_map | length > 0 }}"
+          # Ohne Fenstersensor feuern diese Trigger nie — reine Absicherung,
+          # denn Bereich/Name unten würden auf der leeren Liste abbrechen
+          - "{{ window_sensor is string }}"
         sequence:
           - variables:
               state_word: "{{ 'offen' if trigger.id == 'window_open_long' else 'gekippt' }}"
@@ -1618,7 +1648,7 @@ actions:
           - if:
               - >-
                 {{ trigger.from_state is not none
-                   and (trigger.from_state.state in ['off', 'closed']
+                   and (trigger.from_state.state | lower in ['off', 'closed']
                         or (trigger.from_state.state in ['unavailable', 'unknown']
                             and expand(reclose_scene) | count == 0)) }}
             then:
@@ -1629,7 +1659,7 @@ actions:
                     - "{{ cover_entity }}"
           - choose:
               - conditions:
-                  - "{{ trigger.to_state.state == 'tilted' or (treat_open_as_tilted and trigger.to_state.state in ['on', 'open']) }}"
+                  - "{{ trigger.to_state.state | lower == 'tilted' or (treat_open_as_tilted and trigger.to_state.state | lower in ['on', 'open']) }}"
                   - "{{ state_attr(cover_entity, 'current_position') | int(101) < tilted_position }}"
                 sequence:
                   - action: cover.set_cover_position
@@ -1638,7 +1668,7 @@ actions:
                     data:
                       position: !input tilted_position
               - conditions:
-                  - "{{ trigger.to_state.state in ['on', 'open'] }}"
+                  - "{{ trigger.to_state.state | lower in ['on', 'open'] }}"
                   - "{{ not treat_open_as_tilted }}"
                   - "{{ not night_mode_on }}"
                   # Bei aktiver erzwungener Beschattung bleibt der Rollladen unten
@@ -1658,7 +1688,7 @@ actions:
                           entity_id: "{{ shading_status_helper }}"
               # Nachts nur bis zur Lüftungsposition öffnen statt komplett
               - conditions:
-                  - "{{ trigger.to_state.state in ['on', 'open'] }}"
+                  - "{{ trigger.to_state.state | lower in ['on', 'open'] }}"
                   - "{{ not treat_open_as_tilted }}"
                   - "{{ night_mode_on }}"
                   - "{{ state_attr(cover_entity, 'current_position') | int(101) < night_ventilation_position }}"
@@ -1674,6 +1704,7 @@ actions:
                 to:
                   - "off"
                   - "closed"
+                  - "Closed"
                 for:
                   seconds: 2
             timeout:
