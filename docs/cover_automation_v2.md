@@ -502,6 +502,49 @@ Fenstersensor), meldet jede Instanz für sich. Auf dem Handy ersetzt die zweite
 Meldung dank gleichem Tag die erste, Zusatz-Dienste bekämen die Nachricht aber
 mehrfach — trage sie dann nur in einer der Instanzen ein.
 
+### Ein- und Ausschaltverzögerung (Quellwolken)
+
+An Tagen mit Quellwolken wechseln Sonne und Schatten im Minutentakt. Ohne Verzögerung
+entscheidet die Automation bei jedem 5-Minuten-Takt neu — springen Temperatur oder
+Wetterlage dabei hin und her, fährt der Rollladen ständig auf und zu. Dagegen helfen
+zwei Einstellungen im Sonnenschutz-Abschnitt:
+
+- **Einschaltverzögerung:** Die Beschattung startet erst, wenn Sonnenstand
+  (Sonne im Fenster), Temperatur (über der Schwelle) und Wetterlage (erlaubt) sie so
+  viele Minuten **ununterbrochen** erlauben. Jede Unterbrechung startet die Wartezeit
+  neu.
+- **Ausschaltverzögerung:** Die Beschattung endet erst, wenn ein Ende-Grund (Sonne
+  nicht mehr im Fenster, Temperatur unter Schwelle minus Hysterese, nicht erlaubte
+  Wetterlage) so viele Minuten ununterbrochen besteht. Bis dahin bleibt der Rollladen
+  stehen.
+
+Bewährt hat sich ein asymmetrisches Paar wie **5 Minuten Ein, 20 Minuten Aus**:
+schnell schützen, zögerlich wieder öffnen. 0 (Standard) heißt keine Verzögerung —
+die Entscheidung fällt wie bisher beim nächsten 5-Minuten-Takt.
+
+Gut zu wissen:
+
+- Die Wartezeit bezieht sich nur auf Sonne, Temperatur und Wetterlage. Spricht nach
+  ihrem Ablauf noch etwas anderes gegen die Beschattung (Fenster offen, Nachtmodus,
+  Sturm, Pause, Notfall, Freigabe aus, außerhalb des Zeitfensters, Regenschutz,
+  Abwesenheit, Hindernis), merkt sich die Automation den Ablauf und beschattet beim
+  nächsten 5-Minuten-Takt, sobald der Hinderungsgrund weg ist — ohne erneute
+  Wartezeit, solange Sonne, Temperatur und Wetterlage durchgehend gepasst haben.
+- Die Ausschaltverzögerung gilt für das reguläre Ende (Sonne, Temperatur,
+  Wetterlage) — auch wenn die Sonne abends planmäßig das Sichtfeld verlässt; der
+  Rollladen öffnet dann entsprechend später. Nachtmodus, Sturm, Lüften,
+  Morgens-Öffnen, das Ende einer Pause, eine ausgeschaltete Freigabe und das Ende des
+  Zeitfensters greifen dagegen wie bisher sofort.
+- Den Ablauf der Wartezeit merkt sich die Automation in einer temporären Szene
+  (`scene.shading_start_…` bzw. `scene.shading_end_…`); sie verschwindet von selbst,
+  sobald Sonne, Temperatur oder Wetterlage nicht mehr passen.
+- Das Nachführen einer laufenden Beschattung bleibt beim 5-Minuten-Takt.
+- Ist die Temperaturquelle kurz nicht verfügbar, zählt das weder als Start- noch als
+  Ende-Grund; eine laufende Wartezeit beginnt danach von vorn.
+- Mit gesetzter Ausschaltverzögerung ersetzt diese die feste 10-Minuten-Trägheit des
+  Wetterlagen-Filters.
+- Nach einem Neustart beginnen die Wartezeiten von vorn (siehe Bekannte Grenzen).
+
 ### Warum die Status-Helfer nötig sind
 
 Blueprints haben keinen eigenen Speicher, und bei Funk-Rollläden lässt sich aus den
@@ -716,6 +759,16 @@ Beschattung und Sonnenheizen brauchen kein Nachholen: Ihre 5-Minuten-Durchläufe
 - **Wetterlagen-Filter:** Flattert das Wetter zwischen zwei _nicht_ erlaubten Lagen
   (z. B. Regen ↔ Starkregen), beendet erst Sonnenstand oder Temperatur die
   Beschattung. Der Filter beendet nur bei mindestens 10 Minuten stabil schlechter Lage.
+  Mit Ausschaltverzögerung entfällt diese Einschränkung: Dann beendet jede nicht
+  erlaubte Lage, die für die eingestellte Zeit ununterbrochen anliegt — auch im
+  Wechsel zwischen zwei nicht erlaubten Lagen.
+- **Verzögerungen nach einem Neustart:** Startet Home Assistant neu (oder wird die
+  Automation neu geladen bzw. wieder eingeschaltet), beginnen laufende Ein- und
+  Ausschaltverzögerungen von vorn; nach einem Neustart ist auch eine schon
+  abgelaufene, aber noch nicht genutzte Verzögerung vergessen. Sind die Bedingungen
+  dabei schon erfüllt, entscheidet stattdessen der 5-Minuten-Takt in den ersten zehn
+  Minuten nach Ablauf der Verzögerung (gezählt ab dem Neustart) anhand des Zustands in
+  diesem Moment — eine kurze Unterbrechung in der Zwischenzeit fällt dann nicht auf.
 - **Cover ohne Positions-Angabe** (nur auf/zu): Morgens-Öffnen funktioniert, der
   Nachtmodus schließt ganz (statt auf die Nachtposition), Kipp-Position, Beschattung
   und Regenschutz werden übersprungen — sie brauchen Positionsdaten. Beim Öffnen des Fensters fährt
@@ -924,7 +977,8 @@ Benachrichtigung wegen fehlendem Status-Helfer? Ist eine Temperaturquelle gesetz
 (eigener Sensor oder Wetter-Entität im Sturmschutz-Abschnitt)? Liegt die
 Außentemperatur über der Schwelle, steht die Sonne im Sichtfeld (Ausrichtung
 korrekt?) und zwischen minimaler und maximaler Sonnenhöhe, liegt die Uhrzeit im
-Zeitfenster ("frühestens ab"/"spätestens bis"), und ist das Fenster nicht komplett offen? Ist ein Freigabe-Helfer gesetzt, muss er eingeschaltet sein.
+Zeitfenster ("frühestens ab"/"spätestens bis"), und ist das Fenster nicht komplett offen? Ist ein Freigabe-Helfer gesetzt, muss er eingeschaltet sein. Mit Einschaltverzögerung
+müssen Sonnenstand, Temperatur und Wetterlage zusätzlich so lange ununterbrochen passen.
 
 **Über dem Fenster ist ein Balkon oder Vordach — mittags wird trotzdem verdunkelt?**
 Die maximale Sonnenhöhe im Abschnitt "Fenstergeometrie & Sonnenausrichtung" auf den
