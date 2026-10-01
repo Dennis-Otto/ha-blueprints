@@ -1182,6 +1182,39 @@ blueprint:
               step: 1
               mode: slider
               unit_of_measurement: Minuten
+    restart_section:
+      name: Nach HA-Neustart
+      description: >
+        Holt nach einem Neustart von Home Assistant nach, was in die Ausfallzeit
+        gefallen ist — z.B. wenn ein Update genau über die Morgens-Uhrzeit lief.
+      icon: mdi:restart
+      collapsed: true
+      input:
+        restart_catch_up:
+          name: Nach Neustart nachholen
+          description: >
+            Fällt die Morgens-Uhrzeit in einen Neustart von Home Assistant, bleibt
+            der Rollladen an diesem Tag sonst zu; auch ein aktiver Nachtmodus wird
+            nach dem Start nicht erneut hergestellt. Wenn aktiviert, wartet die
+            Automation nach dem Start 60 Sekunden (bis Rollladen und Sensoren
+            verfügbar sind) und prüft dann: Liegt die heutige Morgens-Uhrzeit
+            höchstens 2 Stunden zurück, wird der Rollladen wie beim Morgens-Öffnen
+            hochgefahren, falls er geschlossener als die Zielposition ist. Später
+            nicht mehr — wer den Rollladen Stunden nach der Morgens-Uhrzeit noch
+            zu hat, will das vermutlich so (Mittagsschlaf, Hitze). Ist dagegen
+            Nacht (Sonne unter dem Horizont, abends oder vor der Morgens-Uhrzeit)
+            und der Nachtmodus eingeschaltet, wird der Nachtzustand hergestellt — bei
+            gekipptem oder offenem Fenster wird dabei nur hochgefahren, nie
+            abgesenkt. Sturmschutz und Pause haben Vorrang; Beschattung und
+            Sonnenheizen übernehmen ihre nächsten Durchläufe ohnehin selbst.
+            Ein nachts von Hand geöffneter Rollladen fährt bei geschlossenem
+            Fenster wieder zu. ⚠️ Aussperr-Gefahr, falls der Fensterkontakt nach
+            dem Neustart einen veralteten Zustand meldet (Balkontür inzwischen
+            offen, Kontakt meldet noch "zu"). Aus = bisheriges Verhalten (nach
+            einem Neustart wird nichts nachgeholt).
+          default: false
+          selector:
+            boolean: {}
     notification_section:
       name: Benachrichtigungen
       description: >
@@ -1494,6 +1527,11 @@ triggers:
   - trigger: time
     at: !input night_mode_time
     id: night_close_time
+  # Feuert nur beim echten Start von Home Assistant, nicht beim Neuladen der Automationen
+  - trigger: homeassistant
+    event: start
+    id: ha_started
+    enabled: !input restart_catch_up
   - trigger: numeric_state
     entity_id: !input weather_entity
     attribute: wind_speed
@@ -2363,6 +2401,174 @@ actions:
                                   entity_id: !input cover
                                 data:
                                   position: !input night_close_position
+
+      # --- NACH HA-NEUSTART: VERPASSTES NACHHOLEN ---
+      # Fällt die Morgens-Uhrzeit in einen Neustart, feuert ihr Trigger nicht; ein
+      # kurz vor dem Herunterfahren eingeschalteter Nachtmodus kann seinen Fahrbefehl
+      # verloren haben — dieser Zweig bewertet einmal nach dem Start neu
+      - conditions:
+          - condition: trigger
+            id: ha_started
+        sequence:
+          # Erst warten, bis Integrationen, Rollladen und Sensoren verfügbar sind —
+          # danach zählt nur der AKTUELLE Zustand, nicht der beim Start
+          - delay:
+              seconds: 60
+          - variables:
+              pause_now: >-
+                {% set helpers = [pause_boolean] if pause_boolean is string else pause_boolean %}
+                {% set pausing = 'on' if pause_mode == 'on_pauses' else 'off' %}
+                {% set found = expand(helpers) | list %}
+                {{ helpers | length > 0
+                   and found | length > 0
+                   and found | rejectattr('state', 'eq', pausing) | list | length == 0 }}
+              wind_now: >-
+                {% if storm_wind_sensor is string %}
+                  {{ states(storm_wind_sensor) | float(0) }}
+                {% elif weather_entity is string %}
+                  {{ state_attr(weather_entity, 'wind_speed') | float(0) }}
+                {% else %}
+                  0
+                {% endif %}
+              # Sekunden seit der heutigen Morgens-Uhrzeit (negativ = steht noch bevor).
+              # Ohne Morgens-Öffnen bzw. ohne Uhrzeit-Helfer (nur Uhrzeit, ohne Datum)
+              # gilt -1: nichts nachzuholen, und kein Morgens-Trigger hat geöffnet
+              morning_since: >-
+                {% if morning_enabled and morning_time is string and has_value(morning_time)
+                      and state_attr(morning_time, 'has_time')
+                      and not state_attr(morning_time, 'has_date') %}
+                  {{ (now() - today_at(states(morning_time))).total_seconds() }}
+                {% else %}
+                  -1
+                {% endif %}
+              # Fenster, Notfall und Hindernis-Sperre jetzt lesen (Laufbeginn ist 60 s her)
+              win_now: "{{ (states(window_sensor) | lower) if window_sensor is string else 'closed' }}"
+              emergency_now: >-
+                {% set sensors = [emergency_sensors] if emergency_sensors is string else emergency_sensors %}
+                {{ sensors | select('is_state', 'on') | list | length > 0 }}
+              block_now: >-
+                {% set sensors = [block_sensors] if block_sensors is string else block_sensors %}
+                {% set ns = namespace(blocked = false) %}
+                {% for s in sensors %}
+                  {% if states(s) != 'off'
+                        or as_timestamp(now()) - as_timestamp(states[s].last_changed) < (block_release_delay | float(0)) * 60 - 2 %}
+                    {% set ns.blocked = true %}
+                  {% endif %}
+                {% endfor %}
+                {{ ns.blocked }}
+              # Frostschutz: auch das nachgeholte Öffnen ist eine Öffnungsfahrt
+              morning_target: >-
+                {{ [morning_position | int, frost_max_position | int] | min if frost_active
+                   else morning_position | int }}
+          # Pause, Sturm und Notfall nach dem Warten erneut prüfen — alle verhindern jedes Nachholen
+          - condition: "{{ not pause_now }}"
+          - condition: "{{ not emergency_now }}"
+          - condition: "{{ not storm_enabled or (wind_now | float(0)) < wind_speed_threshold }}"
+          - choose:
+              # Morgens-Uhrzeit höchstens 2 Stunden her: Morgens-Öffnen nachholen —
+              # auch bei noch aktivem Nachtmodus, genau wie der reguläre Morgens-Trigger.
+              # Später nicht mehr: Wer den Rollladen Stunden danach noch zu hat, will
+              # das vermutlich so (Mittagsschlaf, Hitze) — ein Öffnen am Nachmittag
+              # wäre kein Nachholen, sondern ein Fehler
+              - conditions:
+                  - "{{ 0 <= morning_since | float(-1) <= 7200 }}"
+                sequence:
+                  # Führen Beschattung oder Sonnenheizen den Rollladen gerade (Status-
+                  # Helfer an), nichts anfassen: sonst fährt er hoch und beim nächsten
+                  # Tick wieder runter, bzw. ein manuelles Schließen würde übergangen
+                  - condition: >-
+                      {{ not (shading_status_helper is string and is_state(shading_status_helper, 'on'))
+                         and not (solar_heating_status_helper is string and is_state(solar_heating_status_helper, 'on')) }}
+                  - choose:
+                      - conditions:
+                          - "{{ state_attr(cover_entity, 'current_position') is not none }}"
+                          - "{{ state_attr(cover_entity, 'current_position') | int(101) < morning_target }}"
+                        sequence:
+                          - action: cover.set_cover_position
+                            target:
+                              entity_id: !input cover
+                            data:
+                              position: "{{ morning_target }}"
+                      # Cover ohne Positions-Attribut: nur öffnen, wenn er als
+                      # geschlossen gemeldet wird (unavailable/unknown zählt nicht)
+                      - conditions:
+                          - "{{ state_attr(cover_entity, 'current_position') is none }}"
+                          - "{{ is_state(cover_entity, 'closed') }}"
+                        sequence:
+                          - action: cover.open_cover
+                            target:
+                              entity_id: !input cover
+              # Aktiven Nachtmodus wiederherstellen — nur, solange wirklich Nacht ist:
+              # Sonne unter dem Horizont, und es ist Abend (Sonne nicht steigend) oder
+              # die Morgens-Uhrzeit steht noch bevor. Danach hat der Morgens-Trigger
+              # (der den Nachtmodus nicht beachtet) meist schon geöffnet; ein noch
+              # aktiver Helfer hieße dann nicht "zu". Ohne Fensterkontakt nichts bewegen
+              - conditions:
+                  - "{{ night_mode_on }}"
+                  - >-
+                    {{ is_state('sun.sun', 'below_horizon')
+                       and (not state_attr('sun.sun', 'rising') or morning_since | float(-1) < 0) }}
+                  - "{{ window_sensor is not string or has_value(window_sensor) }}"
+                  # Hindernis-Sperre: das Ende der Sperre holt den Nachtmodus nach
+                  - "{{ not block_now }}"
+                sequence:
+                  # Status-Helfer wie beim Einschalten des Nachtmodus zurücksetzen:
+                  # Die Nacht beendet Beschattung und Sonnenheizen
+                  - if:
+                      - "{{ shading_status_helper is string and is_state(shading_status_helper, 'on') }}"
+                    then:
+                      - action: input_boolean.turn_off
+                        target:
+                          entity_id: "{{ shading_status_helper }}"
+                  - if:
+                      - "{{ solar_heating_status_helper is string and is_state(solar_heating_status_helper, 'on') }}"
+                    then:
+                      - action: input_boolean.turn_off
+                        target:
+                          entity_id: "{{ solar_heating_status_helper }}"
+                  # Bei gekipptem/offenem Fenster nur HOCHfahren, nie absenken: Der
+                  # Neustart kommt zu einem beliebigen Zeitpunkt — steht gerade jemand
+                  # auf dem Balkon, würde er sonst ausgesperrt
+                  - choose:
+                      - conditions:
+                          - "{{ win_now == 'tilted' or (treat_open_as_tilted and win_now in ['on', 'open']) }}"
+                          - "{{ state_attr(cover_entity, 'current_position') | int(101) < tilted_position }}"
+                        sequence:
+                          - action: cover.set_cover_position
+                            target:
+                              entity_id: !input cover
+                            data:
+                              position: !input tilted_position
+                      - conditions:
+                          - "{{ win_now in ['on', 'open'] }}"
+                          - "{{ not treat_open_as_tilted }}"
+                          - "{{ state_attr(cover_entity, 'current_position') | int(101) < night_ventilation_position }}"
+                        sequence:
+                          - action: cover.set_cover_position
+                            target:
+                              entity_id: !input cover
+                            data:
+                              position: !input night_ventilation_position
+                      # Fenster zu: wie beim Einschalten des Nachtmodus ganz schließen
+                      # oder nur abwärts auf die Nachtposition
+                      - conditions:
+                          - "{{ win_now in ['off', 'closed'] }}"
+                        sequence:
+                          - choose:
+                              - conditions:
+                                  - "{{ night_close_position | int(0) == 0 or state_attr(cover_entity, 'current_position') is none }}"
+                                sequence:
+                                  - action: cover.close_cover
+                                    target:
+                                      entity_id: !input cover
+                              - conditions:
+                                  - "{{ state_attr(cover_entity, 'current_position') | int(-1) > night_close_position | int(0) }}"
+                                sequence:
+                                  - action: cover.set_cover_position
+                                    target:
+                                      entity_id: !input cover
+                                    data:
+                                      position: !input night_close_position
 
       # --- SONNENSCHUTZ ---
       - conditions:
