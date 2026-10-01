@@ -62,10 +62,14 @@ Fenster, bis der Helfer gesetzt oder das Feature deaktiviert ist.
 | Moskito-Modus       | Schaltet beim Fensteröffnen nach Sonnenuntergang die Lichter im Raum aus (mit Ausnahmen)                                                                                  | Fenstersensor (liefert auch den Bereich)   |
 | Benachrichtigungen  | Meldet zu lange offene/gekippte Fenster aufs Handy, mit "Rollladen schließen"-Button; verschwindet automatisch beim Schließen                                             | Fenstersensor, Companion-App-Geräte        |
 | Pausieren           | Hält die komplette Automation an, solange ein Helfer eingeschaltet ist — z.B. während Videoaufnahmen oder wenn Gäste schlafen                                             | `input_boolean`-Helfer (optional)          |
+| Notfall-Öffnen      | Fährt bei Rauch-/CO-Alarm oder Hagelwarnung sofort ganz auf und hält den Rollladen oben, bis alle Sensoren wieder aus sind                                                | `binary_sensor`/`input_boolean` (optional) |
 
-**Prioritäten:** Der **Sturmschutz gewinnt immer** — bei Starkwind bewegen weder
-Morgens-Öffnen noch Beschattung, Sonnenheizen oder das Zurückfahren den Rollladen,
-und auch der Pausier-Helfer hält ihn nicht auf (Schutz der Hardware geht vor).
+**Prioritäten:** Ganz oben steht das **Notfall-Öffnen** — meldet ein Notfall-Sensor
+Alarm, fährt der Rollladen hoch und bleibt oben, egal was Sturmschutz, Pause oder
+Nachtmodus wollen (Fluchtweg bzw. Schutz des Behangs gehen vor). Danach gewinnt
+der **Sturmschutz** — bei Starkwind bewegen weder Morgens-Öffnen noch Beschattung,
+Sonnenheizen oder das Zurückfahren den Rollladen, und auch der Pausier-Helfer hält
+ihn nicht auf (Schutz der Hardware geht vor).
 Danach kommt die Pause (solange ihr Helfer an ist, passiert sonst gar nichts),
 dann der Nachtmodus (nachts wird nicht beschattet, nicht geheizt und beim
 Fensteröffnen nur bis zur Lüftungsposition geöffnet), dann erst die Komfort-Features.
@@ -246,6 +250,37 @@ Panzer bietet dem Wind Angriffsfläche und schlägt in den Schienen, der eingefa
 Panzer ist im Kasten geschützt — Schutz vor Wind hat Vorrang. Im Panzer-Modus
 (schließen bei Sturm) stellt sich die Frage ohnehin nicht.
 
+### Notfall-Öffnen (Rauchmelder, Hagelwarnung)
+
+Im Abschnitt "Notfall-Öffnen" wählst du einen oder mehrere binäre Sensoren oder
+`input_boolean`-Helfer aus — typischerweise Rauch- und CO-Melder, aber auch eine
+Hagelwarnung (z. B. von einem Hagelschutz-Dienst). Sobald einer davon `on` meldet,
+fährt der Rollladen ganz auf: als Fluchtweg und Zugang für die Feuerwehr bzw.
+damit der Behang nicht vom Hagel beschädigt wird. Das passiert ohne Rücksicht auf
+Fenster, Nachtmodus, Pause und Sturmschutz — auch im Panzer-Modus. Liegt beim
+Start von Home Assistant bereits ein Alarm an, wird ebenfalls geöffnet. Auch ein
+Probealarm (Testknopf am Rauchmelder) öffnet den Rollladen.
+
+Solange mindestens ein Sensor `on` ist, bewegt die Automation den Rollladen nicht:
+kein Nachtmodus, keine Beschattung, kein Sturmschutz, kein Morgens-Öffnen, und
+auch der "Rollladen schließen"-Knopf der Benachrichtigung bleibt wirkungslos. Der
+Moskito-Modus schaltet keine Lichter aus; Fenster-Benachrichtigungen laufen
+weiter. Ein gerade laufendes Lüften wird durch den Alarm beendet — die
+Ausgangsposition wird danach nicht wiederhergestellt. Den Wandtaster blockiert
+die Automation nicht: Wer den Rollladen von Hand herunterfährt, wird erst durch
+einen erneuten Alarm wieder übersteuert.
+
+Melden alle Sensoren wieder `off`, holt die Automation einen inzwischen aktiven
+Nachtmodus nach (bei offenem oder gekipptem Fenster mit Lüftungsposition, bei
+Sturm gar nicht, während einer Pause erst zu deren Ende). Die Beschattung bewertet
+der nächste Tick frisch. Die Position vor dem Alarm wird nicht wiederhergestellt,
+weitere verpasste Ereignisse werden nicht nachgeholt.
+
+Licht einschalten, Türen entriegeln oder Durchsagen gehören bewusst nicht in
+dieses Blueprint — es steuert nur seinen eigenen Rollladen. Dafür eine eigene
+Automation auf dieselben Sensoren anlegen; dort lässt sich auch entscheiden, ob
+im Brandfall überhaupt Strom geschaltet werden soll.
+
 ## Bekannte Grenzen
 
 - **Wind-Sensor kurz nicht verfügbar** zählt als "windstill". Bewusste Entscheidung:
@@ -288,6 +323,22 @@ Panzer ist im Kasten geschützt — Schutz vor Wind hat Vorrang. Im Panzer-Modus
 - **Nachtmodus-Helfer morgens noch an:** Solange der Helfer an ist, gilt Nacht — wird
   ein Fenster geschlossen, fährt der Rollladen zu, auch wenn Morgens öffnen ihn schon
   geöffnet hat. Den Helfer daher spätestens zur Öffnungszeit ausschalten.
+- **Notfall-Öffnen ist kein Sicherheitssystem:** Ist der Rollladen selbst stromlos
+  (Sicherung ausgelöst) oder sein Funknetz ausgefallen, kann die Automation ihn
+  nicht öffnen. Geöffnet werden nur Rollläden, die eine Instanz dieses Blueprints
+  haben — Markisen oder andere Rollläden brauchen eine eigene Automation.
+- **Notfall-Sensor fällt im Alarm aus:** `unavailable`/`unknown` zählt nie als
+  Alarm. Wird ein Sensor während des Alarms nicht verfügbar (z. B. ein Rauchmelder
+  im Brand), läuft die Automatik wieder normal: Der Nachtmodus wird nicht
+  nachgeholt (auch nicht, wenn die übrigen Sensoren sauber `off` melden), aber
+  spätere Ereignisse (z. B. Beschattung) bewegen den Rollladen wieder. Wer das
+  ausschließen will, nimmt einen `input_boolean` "Feueralarm", den eine eigene
+  Automation beim Alarm einschaltet und der erst von Hand zurückgesetzt wird.
+  Endet der Alarm während eines Neustarts, wird der Nachtmodus ebenfalls nicht
+  nachgeholt.
+- **Sturm nach dem Notfall:** Hält der Sturm nach dem Notfall an, wird der
+  Sturmschutz nicht nachgeholt — im Panzer-Modus bleibt der Rollladen oben, bis der
+  Wind die Schwelle erneut überschreitet oder ein reguläres Ereignis ihn übernimmt.
 
 ## FAQ
 
@@ -367,8 +418,8 @@ fürs Dashboard ("Rollladensteuerung aktiv" — an heißt: die Automatik läuft)
 mehreren Helfern pausiert die Automatik nur, wenn alle gleichzeitig im
 Pausier-Zustand stehen — bei "AUS pausiert" läuft sie also, sobald einer an ist. Während
 der Pause macht die Automatik nichts:
-keine Fahrten, keine Lichter, keine Meldungen. Zwei Ausnahmen: Der Sturmschutz
-greift weiterhin, und der "Rollladen schließen"-Knopf einer Benachrichtigung
+keine Fahrten, keine Lichter, keine Meldungen. Ausnahmen: Notfall-Öffnen und
+Sturmschutz greifen weiterhin, und der "Rollladen schließen"-Knopf einer Benachrichtigung
 funktioniert wie der Wandtaster — bewusste Befehle werden nicht blockiert.
 Praktisch für Videoaufnahmen (konstantes Licht!), schlafende Gäste oder den
 Fensterputzer. Beim Ausschalten holt die Automation einen inzwischen aktiven

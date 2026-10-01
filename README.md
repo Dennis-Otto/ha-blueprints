@@ -14,7 +14,8 @@ Pro Fenster/Rollladen wird eine eigene Automation erstellt — gemeinsame Helfer
 - Morgens öffnen (input_datetime-Helfer, abschaltbar)
 - Fenster-Interaktion (offen/gekippt → Position, mit Rückfahr-Logik)
 - Nachtmodus inkl. Lüftungsposition bei offenem Fenster
-- Sturmschutz (Wetter-Entität oder Wind-Sensor, optionaler Panzer-Modus) — hat immer Vorrang
+- Sturmschutz (Wetter-Entität oder Wind-Sensor, optionaler Panzer-Modus) — hat Vorrang vor allem außer dem Notfall-Öffnen
+- Notfall-Öffnen bei Rauch-/CO-Alarm oder Hagelwarnung (fährt auf und lässt den Rollladen oben, bis alle Sensoren wieder aus sind)
 - Sonnenschutz/Beschattung anhand des Sonnenstands (Fenster-Geometrie, Temperatur-Schwelle
   mit Hysterese, optionaler Wetterlagen-Filter und Freigabe-Helfer, erkennt manuelle
   Eingriffe)
