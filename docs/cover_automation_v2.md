@@ -50,18 +50,18 @@ Fenster, bis der Helfer gesetzt oder das Feature deaktiviert ist.
 
 ## Die Features im Überblick
 
-| Feature             | Was es tut                                                                                                                                              | Voraussetzung                              |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| Morgens öffnen      | Fährt zur eingestellten Uhrzeit auf die Zielposition (nur wenn geschlossener)                                                                           | `input_datetime`-Helfer (nur Uhrzeit)      |
-| Fenster-Interaktion | Kippen → Lüftungsposition, Öffnen → ganz auf (optional: wie Kippen behandeln); nach dem Schließen zurück in die Ausgangsposition                        | Fenstersensor (dann immer aktiv)           |
-| Nachtmodus          | Schließt beim Einschalten des Helfers oder zur eigenen Uhrzeit ganz oder auf eine Nachtposition; offene/gekippte Fenster bekommen eine Lüftungsposition | `input_boolean` oder Uhrzeit-Helfer        |
-| Sturmschutz         | Fährt bei Starkwind hoch (oder im Panzer-Modus herunter)                                                                                                | Wetter-Entität oder Wind-Sensor            |
-| Sonnenschutz        | Beschattet nach Sonnenstand, sodass die Sonne höchstens X m in den Raum fällt; öffnet danach wieder; optional nur bei Freigabe                          | Status-Helfer, Geometrie, Temperaturquelle |
-| Sonnenheizen        | Öffnet im Winter vergessene Rollos, wenn Sonne ins Fenster scheint und es kalt ist                                                                      | eigener Status-Helfer, Geometrie           |
-| Frostschutz         | Öffnet bei Frost nur bis zu einer Maximalposition (z. B. 90 %), damit ein festgefrorener Panzer nicht reißt                                             | Temperaturquelle wie beim Sonnenschutz     |
-| Moskito-Modus       | Schaltet beim Fensteröffnen nach Sonnenuntergang die Lichter im Raum aus (mit Ausnahmen)                                                                | Fenstersensor (liefert auch den Bereich)   |
-| Benachrichtigungen  | Meldet zu lange offene/gekippte Fenster aufs Handy, mit "Rollladen schließen"-Button; verschwindet automatisch beim Schließen                           | Fenstersensor, Companion-App-Geräte        |
-| Pausieren           | Hält die komplette Automation an, solange ein Helfer eingeschaltet ist — z.B. während Videoaufnahmen oder wenn Gäste schlafen                           | `input_boolean`-Helfer (optional)          |
+| Feature             | Was es tut                                                                                                                                                                | Voraussetzung                              |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| Morgens öffnen      | Fährt zur eingestellten Uhrzeit auf die Zielposition (nur wenn geschlossener)                                                                                             | `input_datetime`-Helfer (nur Uhrzeit)      |
+| Fenster-Interaktion | Kippen → Lüftungsposition, Öffnen → ganz auf (optional: wie Kippen behandeln); nach dem Schließen zurück in die Ausgangsposition                                          | Fenstersensor (dann immer aktiv)           |
+| Nachtmodus          | Schließt beim Einschalten des Helfers oder zur eigenen Uhrzeit ganz oder auf eine Nachtposition; offene/gekippte Fenster bekommen bis zum Schließen eine Lüftungsposition | `input_boolean` oder Uhrzeit-Helfer        |
+| Sturmschutz         | Fährt bei Starkwind hoch (oder im Panzer-Modus herunter)                                                                                                                  | Wetter-Entität oder Wind-Sensor            |
+| Sonnenschutz        | Beschattet nach Sonnenstand, sodass die Sonne höchstens X m in den Raum fällt; öffnet danach wieder; optional nur bei Freigabe                                            | Status-Helfer, Geometrie, Temperaturquelle |
+| Sonnenheizen        | Öffnet im Winter vergessene Rollos, wenn Sonne ins Fenster scheint und es kalt ist                                                                                        | eigener Status-Helfer, Geometrie           |
+| Frostschutz         | Öffnet bei Frost nur bis zu einer Maximalposition (z. B. 90 %), damit ein festgefrorener Panzer nicht reißt                                                               | Temperaturquelle wie beim Sonnenschutz     |
+| Moskito-Modus       | Schaltet beim Fensteröffnen nach Sonnenuntergang die Lichter im Raum aus (mit Ausnahmen)                                                                                  | Fenstersensor (liefert auch den Bereich)   |
+| Benachrichtigungen  | Meldet zu lange offene/gekippte Fenster aufs Handy, mit "Rollladen schließen"-Button; verschwindet automatisch beim Schließen                                             | Fenstersensor, Companion-App-Geräte        |
+| Pausieren           | Hält die komplette Automation an, solange ein Helfer eingeschaltet ist — z.B. während Videoaufnahmen oder wenn Gäste schlafen                                             | `input_boolean`-Helfer (optional)          |
 
 **Prioritäten:** Der **Sturmschutz gewinnt immer** — bei Starkwind bewegen weder
 Morgens-Öffnen noch Beschattung, Sonnenheizen oder das Zurückfahren den Rollladen,
@@ -285,6 +285,9 @@ Panzer ist im Kasten geschützt — Schutz vor Wind hat Vorrang. Im Panzer-Modus
   nicht unter der Nachtposition bei geschlossenem Fenster liegen. Darf ein Rollladen nie
   ganz zufahren (z. B. wegen eines Klimaschlauchs im Fenster), diese Funktionen
   entsprechend einstellen bzw. nicht nutzen.
+- **Nachtmodus-Helfer morgens noch an:** Solange der Helfer an ist, gilt Nacht — wird
+  ein Fenster geschlossen, fährt der Rollladen zu, auch wenn Morgens öffnen ihn schon
+  geöffnet hat. Den Helfer daher spätestens zur Öffnungszeit ausschalten.
 
 ## FAQ
 
@@ -319,7 +322,16 @@ am Nachmittag beschattet die Automation bei Bedarf wieder.
 **Warum fährt der Rollladen nach dem Lüften zurück?** Beim Öffnen des Fensters merkt
 sich die Automation die Ausgangsposition und stellt sie nach dem Schließen wieder her
 (innerhalb des einstellbaren Zeitfensters). Kam inzwischen Nachtmodus oder Sturm,
-wird stattdessen deren Zustand hergestellt.
+wird stattdessen deren Zustand hergestellt. Hat während des Lüftens eine
+Automatik-Fahrt ein neues Ziel gesetzt — Morgens öffnen, Sonnenheizen oder das Ende
+der Beschattung —, verwirft die Automation die gemerkte Position: Der Rollladen
+bleibt nach dem Schließen, wo er ist. Das gilt auch, wenn Morgens öffnen gar nicht
+fahren musste, weil der Rollladen schon oben war. Bei aktivem Nachtmodus fährt der
+Rollladen beim Schließen des Fensters zu — auch wenn das Fenster länger offen war als
+das Zeitfenster (nicht während einer Pause). Beginnt die Beschattung erst während des
+Lüftens, fährt der Rollladen beim Schließen zunächst zurück und wird beim nächsten
+Takt (spätestens nach 5 Minuten) neu beschattet. Eine während des Lüftens von Hand
+gewählte Position (Taster, App) wird beim Zurückfahren dagegen überschrieben.
 
 **Kann ich denselben Status-Helfer für mehrere Fenster verwenden?** Nein — er
 speichert den Zustand genau eines Fensters. Ein geteilter Helfer führt zu falschem

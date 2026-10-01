@@ -118,7 +118,10 @@ blueprint:
           name: Zeitfenster für automatisches Zurückfahren
           description: >
             Wird das Fenster innerhalb dieser Zeit wieder geschlossen, fährt der
-            Rollladen in seine Ausgangsposition zurück.
+            Rollladen in seine Ausgangsposition zurück — außer eine Automatik-Fahrt
+            (Morgens öffnen, Sonnenheizen, Ende der Beschattung) hat das Ziel
+            inzwischen neu gesetzt, dann bleibt er, wo er ist. Bei aktivem
+            Nachtmodus schließt er stattdessen, auch nach Ablauf dieser Zeit.
           default: 30
           selector:
             number:
@@ -1084,6 +1087,8 @@ variables:
   # Ohne Fenstersensor gibt es keine Meldungen — 'none' ist dann nur Platzhalter
   action_id: "{{ 'CLOSE_SHUTTER__' ~ (window_sensor if window_sensor is string else 'none') }}"
   notification_tag: "{{ 'fenster_offen_' ~ ((window_sensor if window_sensor is string else 'none') | slugify) }}"
+  # Gemerkte Ausgangsposition fürs Zurückfahren (per scene.create angelegt)
+  reclose_scene: "scene.reclose_{{ cover_entity | slugify }}"
   device_name_map: >
     {% set ns = namespace(device_names=[]) %}
     {% for device_id in notification_device %}
@@ -1214,7 +1219,8 @@ triggers:
 
 actions:
   # Pausier-Helfer: hält die AUTOMATIK an, mit drei Ausnahmen — Sturmschutz
-  # (Hardware-Schutz geht vor), Benachrichtigungs-Aufräumen (bewegt nichts) und
+  # (Hardware-Schutz geht vor), Benachrichtigungs-Aufräumen (bewegt nichts; das
+  # nächtliche Schließen im selben Zweig prüft die Pause selbst) und
   # der Notification-Knopf (ein bewusster Nutzer-Befehl, wie der Wandtaster)
   - condition: >-
       {{ trigger.id | default('') in ['storm_detected', 'window_closed', 'close_shutter_action']
@@ -1267,6 +1273,20 @@ actions:
               - action: input_boolean.turn_off
                 target:
                   entity_id: "{{ shading_status_helper }}"
+          # Fenster gerade offen/gekippt: Ein wartendes Zurückfahren würde sonst die
+          # Position von vor dem Lüften (meist: zu) zurückholen. Morgens ersetzt sie —
+          # gemerkte Ausgangsposition verwerfen, nach dem Schließen bleibt der
+          # Rollladen, wo er ist. Auch wenn oben nichts gefahren ist (schon offen).
+          # Existenz vorher prüfen: scene.delete schlägt bei fehlender Szene fehl
+          # (continue_on_error: falls ein paralleler Lauf sie gerade gelöscht hat)
+          - if:
+              - "{{ window_state not in ['off', 'closed'] }}"
+              - "{{ expand(reclose_scene) | count > 0 }}"
+            then:
+              - action: scene.delete
+                continue_on_error: true
+                target:
+                  entity_id: "{{ reclose_scene }}"
 
       # --- NACHTMODUS ---
       - conditions:
@@ -1636,6 +1656,17 @@ actions:
                       position: >-
                         {{ [shading_end_position | int, frost_max_position | int] | min if frost_active
                            else shading_end_position | int }}
+                  # Wie bei Morgens öffnen: Endet die Beschattung während des Lüftens,
+                  # ersetzt die End-Position die gemerkte Ausgangsposition (sonst holt
+                  # das Zurückfahren die alte Beschattungs-Position zurück)
+                  - if:
+                      - "{{ window_state not in ['off', 'closed'] }}"
+                      - "{{ expand(reclose_scene) | count > 0 }}"
+                    then:
+                      - action: scene.delete
+                        continue_on_error: true
+                        target:
+                          entity_id: "{{ reclose_scene }}"
 
       # --- SONNENHEIZEN (Winter) ---
       - conditions:
@@ -1721,6 +1752,18 @@ actions:
                       position: >-
                         {{ [solar_heating_position | int, frost_max_position | int] | min if frost_active
                            else solar_heating_position | int }}
+                  # Wie bei Morgens öffnen: Öffnet Sonnenheizen während des Lüftens,
+                  # ersetzt das die gemerkte Ausgangsposition (sonst fährt das
+                  # Zurückfahren wieder zu, und der gesetzte Helfer verhindert ein
+                  # erneutes Öffnen)
+                  - if:
+                      - "{{ window_state not in ['off', 'closed'] }}"
+                      - "{{ expand(reclose_scene) | count > 0 }}"
+                    then:
+                      - action: scene.delete
+                        continue_on_error: true
+                        target:
+                          entity_id: "{{ reclose_scene }}"
               # Sonnenheizen beenden: nur Status zurücksetzen, kein erzwungenes Schließen —
               # der Rollladen bleibt offen, bis Nachtmodus/Fenster-Interaktion ihn regulär bewegen
               - conditions:
@@ -1849,21 +1892,67 @@ actions:
                         - action: "{{ action_id }}"
                           title: Rollladen schließen
 
-      # --- BENACHRICHTIGUNG ABRÄUMEN: FENSTER WIEDER ZU ---
+      # --- FENSTER WIEDER ZU: NACHTS SCHLIESSEN + BENACHRICHTIGUNG ABRÄUMEN ---
       - conditions:
           - condition: trigger
             id: window_closed
-          - "{{ device_name_map | length > 0 }}"
         sequence:
-          - repeat:
-              for_each: "{{ device_name_map }}"
-              sequence:
-                - action: "notify.{{ repeat.item }}"
-                  continue_on_error: true
-                  data:
-                    message: clear_notification
-                    data:
-                      tag: "{{ notification_tag }}"
+          # Nachtmodus aktiv → schließen. Greift auch, wenn kein Lauf der
+          # Fenster-Interaktion mehr wartet (Fenster länger offen als das Zeitfenster
+          # oder schon vor dem Nachtmodus offen) — sonst bliebe die Lüftungsposition
+          # die ganze Nacht stehen. Innerhalb des Zeitfensters schließt der wartende
+          # Lauf auf dieselbe Zustandsänderung mit; das doppelte close ist harmlos.
+          # Das Pause-Gate lässt window_closed fürs Abräumen durch, daher Pause und
+          # Sturm hier selbst prüfen. Nur nach echtem Öffnen/Kippen — ein
+          # unavailable-Blip des Sensors soll keinen Rollladen nachts zufahren
+          - variables:
+              wind_now: >-
+                {% if storm_wind_sensor is string %}
+                  {{ states(storm_wind_sensor) | float(0) }}
+                {% elif weather_entity is string %}
+                  {{ state_attr(weather_entity, 'wind_speed') | float(0) }}
+                {% else %}
+                  0
+                {% endif %}
+          - if:
+              - "{{ trigger.from_state is not none and trigger.from_state.state | lower in ['on', 'open', 'tilted'] }}"
+              - "{{ night_mode_on }}"
+              - "{{ not pause_active }}"
+              - "{{ not storm_enabled or (wind_now | float(0)) < wind_speed_threshold }}"
+              - "{{ states(cover_entity) not in ['closed', 'closing'] }}"
+            then:
+              # Wie im Nachtmodus-Zweig: ganz schließen oder nur abwärts auf die
+              # Nachtposition. Ein Fehler beim Fahren darf das Abräumen der Meldung
+              # nicht verhindern
+              - choose:
+                  - conditions:
+                      - "{{ night_close_position | int(0) == 0 or state_attr(cover_entity, 'current_position') is none }}"
+                    sequence:
+                      - action: cover.close_cover
+                        continue_on_error: true
+                        target:
+                          entity_id: !input cover
+                  - conditions:
+                      - "{{ state_attr(cover_entity, 'current_position') | int(-1) > night_close_position | int(0) }}"
+                    sequence:
+                      - action: cover.set_cover_position
+                        continue_on_error: true
+                        target:
+                          entity_id: !input cover
+                        data:
+                          position: !input night_close_position
+          - if:
+              - "{{ device_name_map | length > 0 }}"
+            then:
+              - repeat:
+                  for_each: "{{ device_name_map }}"
+                  sequence:
+                    - action: "notify.{{ repeat.item }}"
+                      continue_on_error: true
+                      data:
+                        message: clear_notification
+                        data:
+                          tag: "{{ notification_tag }}"
 
       # --- NOTIFICATION-ACTION: ROLLLADEN SCHLIESSEN ---
       - conditions:
@@ -1880,8 +1969,6 @@ actions:
           - condition: trigger
             id: window_change
         sequence:
-          - variables:
-              reclose_scene: "scene.reclose_{{ cover_entity | slugify }}"
           # Ausgangsposition nur beim Übergang aus "geschlossen" sichern — sonst
           # überschreibt Kippen→Öffnen den Snapshot mit der Kipp-Position. Nach
           # unavailable/unknown nur sichern, wenn noch KEIN Snapshot existiert:
