@@ -296,6 +296,30 @@ blueprint:
                   label: "🌨️ Schneeregen"
                 - value: exceptional
                   label: "⚠️ Außergewöhnlich"
+        shading_time_from:
+          name: Beschattung frühestens ab
+          description: >
+            Vor dieser Uhrzeit startet keine Beschattung — z.B. 09:00, damit der
+            Rollladen nicht schon beim ersten Sonnenstrahl herunterfährt und dich
+            morgens weckt. Bildet zusammen mit "Beschattung spätestens bis" ein
+            Zeitfenster: Nur darin wird beschattet und der Sonne nachgeführt.
+            Stehen beide Felder auf derselben Uhrzeit (Standard: beide 00:00:00),
+            gibt es keine Einschränkung. Sonnenheizen ist davon nicht betroffen.
+          default: "00:00:00"
+          selector:
+            time: {}
+        shading_time_until:
+          name: Beschattung spätestens bis
+          description: >
+            Ab dieser Uhrzeit startet keine Beschattung mehr, und eine laufende
+            endet beim nächsten Durchlauf (alle 5 Minuten) regulär: Der Rollladen
+            fährt auf die "Position nach der Beschattung" — z.B. 18:00, um abends
+            die Abendsonne zu genießen. 00:00:00 = bis Mitternacht. Liegt
+            "frühestens ab" später als diese Uhrzeit, reicht das Zeitfenster über
+            Mitternacht hinweg.
+          default: "00:00:00"
+          selector:
+            time: {}
         window_height:
           name: Fensterhöhe
           description: Höhe der Glasfläche in Metern.
@@ -822,6 +846,8 @@ variables:
   shading_override_threshold: !input shading_override_threshold
   force_shading: !input force_shading
   shading_weather_states: !input shading_weather_states
+  shading_time_from: !input shading_time_from
+  shading_time_until: !input shading_time_until
   solar_heating_status_helper: !input solar_heating_status_helper
   solar_heating_temp_threshold: !input solar_heating_temp_threshold
   solar_heating_temp_hysteresis: !input solar_heating_temp_hysteresis
@@ -1213,12 +1239,22 @@ actions:
                    and states(weather_entity) not in ['unknown', 'unavailable']
                    and states(weather_entity) not in shading_weather_states
                    and (as_timestamp(now()) - as_timestamp(states[weather_entity].last_changed)) > 600 }}
+              # Zeitfenster: "ab" == "bis" (Standard 00:00/00:00) = keine Einschränkung,
+              # "ab" > "bis" = über Mitternacht. Die "bis"-Uhrzeit zählt nicht mehr dazu
+              shading_time_ok: >-
+                {% set t_from = today_at(shading_time_from) %}
+                {% set t_until = today_at(shading_time_until) %}
+                {% set t_now = now() %}
+                {{ t_from == t_until
+                   or (t_from < t_until and t_from <= t_now and t_now < t_until)
+                   or (t_from > t_until and (t_now >= t_from or t_now < t_until)) }}
           - choose:
               # Beschattung starten / der Sonne nachführen
               - conditions:
                   - "{{ sun_in_window and outdoor_temp >= shading_temp_threshold }}"
                   - "{{ storm_ok }}"
                   - "{{ weather_ok }}"
+                  - "{{ shading_time_ok }}"
                   - "{{ not (night_mode_boolean is string and is_state(night_mode_boolean, 'on')) }}"
                   - "{{ force_shading or treat_open_as_tilted or states(window_sensor) not in ['on', 'open'] }}"
                 sequence:
@@ -1279,7 +1315,8 @@ actions:
                   - >-
                     {{ (not sun_in_window)
                        or (temp_available and outdoor_temp <= (shading_temp_threshold - shading_temp_hysteresis))
-                       or weather_bad_stable }}
+                       or weather_bad_stable
+                       or not shading_time_ok }}
                   - "{{ not (night_mode_boolean is string and is_state(night_mode_boolean, 'on')) }}"
                 sequence:
                   - action: input_boolean.turn_off
