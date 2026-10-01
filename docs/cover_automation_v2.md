@@ -48,7 +48,7 @@ Fenster, bis der Helfer gesetzt oder das Feature deaktiviert ist.
 | Fenster-Interaktion | Kippen → Lüftungsposition, Öffnen → ganz auf (optional: wie Kippen behandeln); nach dem Schließen zurück in die Ausgangsposition | — (immer aktiv)                            |
 | Nachtmodus          | Schließt beim Einschalten des Helfers; offene/gekippte Fenster bekommen eine Lüftungsposition                                    | `input_boolean`-Helfer                     |
 | Sturmschutz         | Fährt bei Starkwind hoch (oder im Panzer-Modus herunter)                                                                         | Wetter-Entität oder Wind-Sensor            |
-| Sonnenschutz        | Beschattet anhand des Sonnenstands so, dass die Sonne höchstens X m in den Raum fällt; öffnet nach Ende wieder                   | Status-Helfer, Geometrie, Temperaturquelle |
+| Sonnenschutz        | Beschattet nach Sonnenstand, sodass die Sonne höchstens X m in den Raum fällt; öffnet danach wieder; optional nur bei Freigabe   | Status-Helfer, Geometrie, Temperaturquelle |
 | Sonnenheizen        | Öffnet im Winter vergessene Rollos, wenn Sonne ins Fenster scheint und es kalt ist                                               | eigener Status-Helfer, Geometrie           |
 | Moskito-Modus       | Schaltet beim Fensteröffnen nach Sonnenuntergang die Lichter im Raum aus (mit Ausnahmen)                                         | — (Bereich kommt vom Fenstersensor)        |
 | Benachrichtigungen  | Meldet zu lange offene/gekippte Fenster aufs Handy, mit "Rollladen schließen"-Button; verschwindet automatisch beim Schließen    | Companion-App-Geräte                       |
@@ -99,7 +99,8 @@ Tick nur die Ist-Position mit ihrem berechneten Sollwert:
   Rollladen wird in Ruhe gelassen.
 
 Diese "Sperre" gilt **bis zum Ende der laufenden Beschattungs-Episode** (Sonne
-verlässt das Sichtfeld, es kühlt ab, oder der Nachtmodus kommt). Das Episoden-Ende
+verlässt das Sichtfeld, es kühlt ab, der Nachtmodus kommt oder der Freigabe-Helfer
+geht aus). Das Episoden-Ende
 öffnet den Rollladen dann regulär — auch über die manuelle Position hinweg. Am
 nächsten Tag beginnt alles bei null; die Anfangsbewegung ist von der Toleranz
 ausgenommen. Stellst du den Rollladen manuell ungefähr dorthin, wo die Beschattung
@@ -110,6 +111,8 @@ wieder beschattet werden.
 Wer die Beschattung dauerhaft nicht will, deaktiviert den Schalter "Sonnenschutz
 aktivieren" in der Instanz — der Status-Helfer ist **kein** Ausschalter, er ist das
 interne Gedächtnis der Automation und stellt sich bei Handbetätigung einfach zurück.
+Zum zeitweisen Sperren (z. B. tageweise) gibt es den optionalen Freigabe-Helfer —
+siehe FAQ.
 
 ### Warum die Status-Helfer nötig sind
 
@@ -148,7 +151,8 @@ Glas-Kalibrierung (siehe oben) ausgleichen; alle anderen Positions-Eingaben
 Benachrichtigung wegen fehlendem Status-Helfer? Ist eine Temperaturquelle gesetzt
 (eigener Sensor oder Wetter-Entität im Sturmschutz-Abschnitt)? Liegt die
 Außentemperatur über der Schwelle, steht die Sonne im Sichtfeld (Ausrichtung
-korrekt?), und ist das Fenster nicht komplett offen?
+korrekt?), und ist das Fenster nicht komplett offen? Ist ein Freigabe-Helfer gesetzt,
+muss er eingeschaltet sein.
 
 **Warum fährt der Rollladen nach dem Lüften zurück?** Beim Öffnen des Fensters merkt
 sich die Automation die Ausgangsposition und stellt sie nach dem Schließen wieder her
@@ -187,3 +191,20 @@ Praktisch für Videoaufnahmen (konstantes Licht!), schlafende Gäste oder den
 Fensterputzer. Beim Ausschalten holt die Automation einen inzwischen aktiven
 Nachtmodus nach und bewertet die Beschattung neu; verpasste Einzelereignisse
 (morgendliches Öffnen, Zurückfahren nach dem Lüften) werden nicht nachgeholt.
+
+**Kann ich die Beschattung tageweise freigeben oder sperren?** Ja — im Abschnitt
+"Sonnenschutz" einen Freigabe-Helfer auswählen: ein `input_boolean`, einen
+`binary_sensor` oder einen Zeitplan-Helfer (`schedule`). Beschattet wird dann nur,
+solange er eingeschaltet ist; das Einschalten wirkt beim nächsten 5-Minuten-Takt.
+Wird er ausgeschaltet, endet eine laufende Beschattung sofort regulär — der
+Rollladen fährt auf die "Position nach der Beschattung", auch wenn er zwischendurch
+manuell verstellt wurde. Ist der Helfer nicht verfügbar, startet keine neue
+Beschattung, eine laufende wird deswegen aber auch nicht beendet, sondern bleibt
+stehen (wie bei einer kurz ausgefallenen Temperaturquelle). Typische Steuerungen:
+eine eigene Automation, die morgens anhand der Wetterprognose entscheidet, ob heute
+beschattet wird; ein Dashboard-Schalter; ein Zeitplan, der die Beschattung z. B. nur
+werktags erlaubt. Anders als der Pausier-Helfer betrifft die Freigabe nur die
+Beschattung — Fenster-Interaktion, Nachtmodus, Sturmschutz, Sonnenheizen und
+Benachrichtigungen laufen normal weiter. Und anders als der Status-Helfer darf ein
+Freigabe-Helfer in mehreren Instanzen gemeinsam genutzt werden (z. B. einer pro
+Fassade).
