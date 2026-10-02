@@ -229,7 +229,10 @@ Was dann passiert, ist einzeln zuschaltbar:
   Hand geschlossener Rollladen öffnet beim Heimkommen. Wer das für ein Fenster nicht
   möchte, lässt dort "Bei Abwesenheit schließen" aus — das Wiederöffnen gehört zu diesem
   Schalter. Ist für das Morgens-Öffnen ein Bewegungssensor gesetzt, öffnet das
-  Heimkommen nicht selbst; das übernimmt wie morgens die erste Bewegung im Raum.
+  Heimkommen nicht selbst, sondern wie morgens die erste Bewegung im Raum — sofern der
+  Rollladen dafür tief genug steht (höchstens auf Nacht-, Kipp- oder Lüftungsposition
+  bzw. 10 %). Steht er höher, etwa wegen einer höheren Abwesenheits-Position, öffnet
+  das Heimkommen wie ohne Bewegungssensor.
 - **Strenger beschatten:** Während der Abwesenheit gilt für den Sonnenschutz eine
   eigene, kleinere maximale Sonneneinfall-Tiefe (Standard 0,3 m) — mehr Hitzeschutz,
   wenn ein dunklerer Raum niemanden stört. Der Wechsel beim Verlassen und beim
@@ -351,6 +354,12 @@ template:
 "AN pausiert" die normale Instanz. Wer im Urlaub andere Zeiten fahren will, legt eine
 zweite Instanz desselben Fensters mit eigenem Zeit-Helfer an und trägt dort denselben
 Urlaubs-Helfer mit "AUS pausiert" ein — so läuft immer genau eine der beiden.
+Ohne zweite Instanz geht es auch über den Abschnitt "Abwesenheit": Beim Verlassen
+schließt der Rollladen, Morgens-Öffnen und Nachtmodus laufen im Urlaub normal weiter
+(siehe [Abwesenheit & Urlaub](#abwesenheit--urlaub)). Dort zählt ein Helfer oder
+Binärsensor als anwesend, wenn er "an" ist — ein "Urlaub"-Schalter (an = weg) passt
+also nicht direkt; dafür einen "Jemand zuhause"-Helfer verwenden oder den Schalter
+über einen Template-Binärsensor umdrehen.
 
 **Rauchmelder / Alarm — alle Rollos hoch?** Bewusst nicht im Blueprint: Ein Brandalarm
 ist ein Haus-Ereignis, kein Pro-Fenster-Verhalten. Eine einzige kleine Automation ist
@@ -405,14 +414,6 @@ Fensterputzer. Beim Ausschalten holt die Automation einen inzwischen aktiven
 Nachtmodus nach und bewertet die Beschattung neu; verpasste Einzelereignisse
 (morgendliches Öffnen, Zurückfahren nach dem Lüften, Schließen bei Abwesenheit,
 Wiederöffnen beim Heimkommen) werden nicht nachgeholt.
-
-**Gibt es einen Urlaubsmodus?** Ja, über den Abschnitt "Abwesenheit": Personen bzw.
-Tracker auswählen und "Bei Abwesenheit schließen" aktivieren. Beim Verlassen schließt
-der Rollladen, Morgens-Öffnen und Nachtmodus laufen im Urlaub normal weiter (siehe
-[Abwesenheit & Urlaub](#abwesenheit--urlaub)). Ein Helfer oder Binärsensor zählt als
-anwesend, wenn er "an" ist — ein "Urlaub"-Schalter (an = weg) passt also nicht
-direkt; dafür einen "Jemand zuhause"-Helfer verwenden oder den Schalter über einen
-Template-Binärsensor umdrehen.
 
 **Alle sind weg, aber der Rollladen schließt nicht — warum?** Prüfe in dieser
 Reihenfolge: Meldet wirklich jede ausgewählte Entität "weg" (eine Person ohne

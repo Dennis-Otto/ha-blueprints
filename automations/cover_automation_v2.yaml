@@ -786,8 +786,9 @@ blueprint:
             Abwesenheits-Position (egal wer ihn dorthin gefahren hat) und ist es
             weder Nacht (Nachtmodus-Helfer an) noch dunkel, öffnet er auf die
             Zielposition für morgens (bei Frost begrenzt wie morgens; ist für
-            morgens ein Bewegungssensor gesetzt, öffnet erst die erste Bewegung
-            im Raum); die Beschattung bewertet danach der nächste Durchlauf neu.
+            morgens ein Bewegungssensor gesetzt und steht der Rollladen tief genug
+            für das Bewegungs-Öffnen, öffnet erst die erste Bewegung im Raum); die
+            Beschattung bewertet danach der nächste Durchlauf neu.
             ⚠️ Aussperr-Schutz: Ist das Fenster bzw. die Tür offen oder gekippt,
             wird nicht geschlossen — vielleicht steht doch jemand ohne Handy auf
             dem Balkon. Der Schutz braucht einen Fenstersensor; ohne ihn gilt das
@@ -1752,13 +1753,27 @@ actions:
                    and ((pos is not none and pos | int(101) <= away_close_position)
                         or (pos is none and is_state(cover_entity, 'closed'))
                         or is_state(cover_entity, 'closing')) }}
+              # Bewegungs-Modus des Morgens-Öffnens (selten genutzter Raum): Die
+              # erste Bewegung im Raum öffnet den Rollladen, wenn er so tief steht,
+              # wie dessen Bedingung verlangt (gleiche Grenze wie im Morgens-Zweig).
+              # Dann überlässt das Heimkommen ihr das Öffnen; steht er höher (z.B.
+              # Abwesenheits-Position über der Grenze), öffnete an diesem Tag sonst
+              # nichts mehr — dann öffnet das Heimkommen wie ohne Bewegungs-Modus
+              motion_opens: >-
+                {{ morning_enabled
+                   and morning_motion_sensor is string
+                   and ((state_attr(cover_entity, 'current_position') is none
+                         and (states(cover_entity) | lower) in ['closed', 'closing'])
+                        or (state_attr(cover_entity, 'current_position') is not none
+                            and state_attr(cover_entity, 'current_position') | int(101)
+                                <= [night_position | int(0), tilted_position | int(0),
+                                    night_ventilation_position | int(0), 10] | max)) }}
               # Wieder öffnen nur, wenn es weder Nacht noch dunkel ist (beim
               # Heimkommen soll Tageslicht rein, abends bleibt er zu) und kein
-              # Sturm herrscht. Im Bewegungs-Modus des Morgens-Öffnens (selten
-              # genutzter Raum) öffnet stattdessen erst die erste Bewegung im Raum
+              # Sturm herrscht
               open_ok: >-
                 {{ was_held
-                   and morning_motion_sensor is not string
+                   and not motion_opens
                    and not (night_mode_boolean is string and is_state(night_mode_boolean, 'on'))
                    and not is_state('sun.sun', 'below_horizon')
                    and (not storm_enabled or (wind_now | float(0)) < wind_speed_threshold) }}
