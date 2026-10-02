@@ -225,14 +225,16 @@ Muster `Uhrzeit Aktion → Ziel (Grund)`, zum Beispiel:
 Zusätzlich werden die Fälle vermerkt, in denen eine erwartete Fahrt bewusst
 ausgelassen oder ersetzt wurde — sie geben sonst am meisten Rätsel auf:
 
-- `07:00 Morgens öffnen übersprungen (Sturm)`
+- `07:00 Morgens öffnen übersprungen (Sturm)` — beim Öffnen per Bewegung nicht, sonst
+  käme bei jeder Bewegung ein neuer Eintrag dazu, solange der Sturm anhält.
 - `14:02 Sturmschutz übersprungen (Fenster offen)` — das Fenster war offen und
   "Aktion bei Sturm erzwingen" ist aus.
 - `09:40 Zurückfahren → zu (Nachtmodus)` — während des Lüftens kam der Nachtmodus,
   statt der Ausgangsposition wird geschlossen.
 - `09:40 Zurückfahren übersprungen (Sturm)` bzw. `(Pause)` oder
-  `(Ausgangsposition unbekannt)` — Letzteres, wenn die beim Öffnen gemerkte
-  Position fehlt (gemerkte Positionen überleben keinen Neustart von Home Assistant).
+  `(keine gemerkte Position)` — Letzteres, wenn die beim Öffnen gemerkte Position
+  fehlt (gemerkte Positionen überleben keinen Neustart von Home Assistant) oder das
+  Morgens-Öffnen sie verworfen hat.
 
 Meldet der Fenstersensor beim Nachtmodus oder Sturm gerade keinen gültigen Zustand
 (z. B. `unavailable`), steht als Grund `(Fensterstatus unbekannt)`. Ohne
@@ -287,6 +289,11 @@ oder falsch konfigurierter Text-Helfer bringt die Steuerung nie aus dem Tritt.
   Sonnenuntergang, laufen die Rollladen-Fahrt und das Ausschalten der Lichter
   parallel. Im Text-Helfer steht danach der Eintrag, der zuletzt fertig war — das
   Logbuch zeigt beide.
+- **Fenster nachts innerhalb der Rückfahrzeit geschlossen:** Dann holen sowohl das
+  Zurückfahren als auch das Fenster-Schließen den Nachtmodus nach — beide kommen zum
+  selben Ergebnis, schreiben aber jeweils einen Status. Im Text-Helfer steht danach
+  zufällig einer der beiden Texte (`Zurückfahren → zu (Nachtmodus)` oder
+  `Fenster zu → Nachtmodus nachgeholt`), das Logbuch zeigt beide Einträge.
 
 ## FAQ
 

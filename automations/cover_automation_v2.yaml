@@ -1290,8 +1290,11 @@ actions:
                 {% else %}
                   {{ morning_position | int(100) }}
                 {% endif %}
+          # Nicht bei Bewegung: Sonst würde der Vermerk bei jeder Bewegung im
+          # Raum neu geschrieben, solange der Sturm anhält (Logbuch-Flut)
           - if:
               - "{{ storm_enabled and (wind_now | float(0)) >= wind_speed_threshold }}"
+              - "{{ trigger.id != 'morning_motion' }}"
             then:
               # Diagnose (optional): letzte Aktion samt Grund in den Text-Helfer
               # (auf dessen Max-Länge gekürzt) und/oder ins Logbuch schreiben.
@@ -2571,7 +2574,7 @@ actions:
                   - variables:
                       status_text: >-
                         Zurückfahren übersprungen
-                        ({{ 'Sturm' if storm_now else 'Pause' if pause_now else 'Ausgangsposition unbekannt' }})
+                        ({{ 'Sturm' if storm_now else 'Pause' if pause_now else 'keine gemerkte Position' }})
                   - if:
                       - "{{ status_helper is string }}"
                     then:
