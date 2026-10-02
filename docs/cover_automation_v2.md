@@ -7,28 +7,41 @@
 ## Konzept
 
 **Eine Automation pro Fenster/Rollladen-Paar.** Du legst für jedes Fenster eine eigene
-Instanz aus diesem Blueprint an und wählst dort genau einen Rollladen und genau einen
-Fensterkontakt aus. Als Fensterkontakt funktionieren klassische binäre Sensoren
-(offen/geschlossen) genauso wie Drei-Zustands-Sensoren (offen/gekippt/geschlossen). Gemeinsame Einstellungen — die Uhrzeit fürs
-morgendliche Öffnen, der Nachtmodus-Schalter, die Wetter-Entität — sind Helfer, die du
-einfach in allen Instanzen identisch auswählst.
+Instanz aus diesem Blueprint an und wählst dort genau einen Rollladen und — wenn
+vorhanden — genau einen Fensterkontakt aus. Als Fensterkontakt funktionieren klassische
+binäre Sensoren (offen/geschlossen) genauso wie Drei-Zustands-Sensoren
+(offen/gekippt/geschlossen, auch mit großgeschriebenen Zuständen wie `Tilted`).
+Gemeinsame Einstellungen — die Uhrzeit fürs morgendliche Öffnen, der Nachtmodus-Helfer,
+die Wetter-Entität — sind Helfer, die du einfach in allen Instanzen identisch auswählst.
 
 Warum so? Weil jedes Fenster eigene Eigenschaften hat (Ausrichtung, Größe, Balkontür
 oder nicht) und weil damit jede Instanz für sich verständlich, testbar und abschaltbar
-bleibt. Nur zwei Felder sind Pflicht: Rollladen und Fenstersensor. Jedes Feature
-darüber hinaus ist per Schalter zuschaltbar.
+bleibt. Nur **ein** Feld ist Pflicht: der Rollladen. Der Fenstersensor ist optional —
+festverglaste Fenster ohne Kontakt bekommen trotzdem Morgens-Öffnen, Nachtmodus,
+Sturmschutz, Beschattung, Sonnenheizen und Frostschutz; nur die fensterbezogenen
+Funktionen (Fenster-Interaktion, Benachrichtigungen, Moskito-Modus) entfallen dann.
+Jedes Feature darüber hinaus ist per Schalter zuschaltbar.
 
 ## Einrichtung
 
 1. **Blueprint importieren** (Button oben) und unter _Einstellungen → Automatisierungen
    & Szenen → Blueprints_ eine Instanz pro Fenster anlegen.
-2. **Rollladen + Fenstersensor** zuordnen — mehr braucht es für den Start nicht.
+   Wichtig beim manuellen Import: die **URL der Blueprint-Datei** verwenden
+   (`https://github.com/TheRealSimon42/ha-blueprints/blob/main/automations/cover_automation_v2.yaml`),
+   nicht die Adresse des Repositories — die Repo-URL liefert eine HTML-Seite und
+   endet in einem YAML-Fehler ("mapping values are not allowed here").
+2. **Rollladen zuordnen** (und den Fenstersensor, falls es einen gibt) — mehr braucht
+   es für den Start nicht.
 3. **Je nach gewünschten Features Helfer anlegen** (_Einstellungen → Geräte & Dienste →
    Helfer_):
    - Morgens öffnen: ein `input_datetime`-Helfer, **nur mit Uhrzeit, ohne Datum**
      (ein Datum+Zeit-Helfer feuert nur ein einziges Mal!). Einer für alle Instanzen.
-   - Nachtmodus: ein `input_boolean`, z. B. "Nacht-Modus". Einer für alle Instanzen;
-     wie er geschaltet wird (Zeitplan, Guten-Nacht-Szene, von Hand), bleibt dir überlassen.
+     Alternativ oder zusätzlich: "Mit dem Sonnenaufgang öffnen" aktivieren — es gilt
+     dann der spätere der beiden Zeitpunkte.
+   - Nachtmodus: ein `input_boolean` (z. B. "Nacht-Modus"), ein **Zeitplan-Helfer**
+     (Schedule) oder ein beliebiger Binärsensor. Einer für alle Instanzen; "an" heißt
+     Nacht. Mit einem Zeitplan-Helfer schließen die Rollläden automatisch zum
+     Blockbeginn — ganz ohne eigene Zusatz-Automation.
    - Sonnenschutz: ein `input_boolean` **pro Fenster** als Status-Speicher,
      Namensvorschlag: "Beschattung <Fenstername>".
    - Sonnenheizen: ein **weiterer** `input_boolean` pro Fenster (nicht denselben wie
@@ -42,29 +55,70 @@ Fenster, bis der Helfer gesetzt oder das Feature deaktiviert ist.
 
 ## Die Features im Überblick
 
-| Feature             | Was es tut                                                                                                                       | Voraussetzung                              |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| Morgens öffnen      | Fährt zur eingestellten Uhrzeit auf die Zielposition (nur wenn geschlossener)                                                    | `input_datetime`-Helfer (nur Uhrzeit)      |
-| Fenster-Interaktion | Kippen → Lüftungsposition, Öffnen → ganz auf (optional: wie Kippen behandeln); nach dem Schließen zurück in die Ausgangsposition | — (immer aktiv)                            |
-| Nachtmodus          | Schließt beim Einschalten des Helfers; offene/gekippte Fenster bekommen eine Lüftungsposition                                    | `input_boolean`-Helfer                     |
-| Sturmschutz         | Fährt bei Starkwind hoch (oder im Panzer-Modus herunter)                                                                         | Wetter-Entität oder Wind-Sensor            |
-| Sonnenschutz        | Beschattet anhand des Sonnenstands so, dass die Sonne höchstens X m in den Raum fällt; öffnet nach Ende wieder                   | Status-Helfer, Geometrie, Temperaturquelle |
-| Sonnenheizen        | Öffnet im Winter vergessene Rollos, wenn Sonne ins Fenster scheint und es kalt ist                                               | eigener Status-Helfer, Geometrie           |
-| Frostschutz         | Öffnet bei Frost nur bis zu einer Maximalposition (z. B. 90 %), damit ein festgefrorener Panzer nicht reißt                      | Temperaturquelle wie beim Sonnenschutz     |
-| Moskito-Modus       | Schaltet beim Fensteröffnen nach Sonnenuntergang die Lichter im Raum aus (mit Ausnahmen)                                         | — (Bereich kommt vom Fenstersensor)        |
-| Benachrichtigungen  | Meldet zu lange offene/gekippte Fenster aufs Handy, mit "Rollladen schließen"-Button; verschwindet automatisch beim Schließen    | Companion-App-Geräte                       |
-| Pausieren           | Hält die komplette Automation an, solange ein Helfer eingeschaltet ist — z.B. während Videoaufnahmen oder wenn Gäste schlafen    | `input_boolean`-Helfer (optional)          |
+| Feature             | Was es tut                                                                                                                                                               | Voraussetzung                                                        |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| Morgens öffnen      | Fährt zur eingestellten Uhrzeit und/oder zum Sonnenaufgang auf die Zielposition (nur wenn geschlossener); optional erst bei der ersten Bewegung im Raum                  | `input_datetime`-Helfer (nur Uhrzeit) und/oder Sonnenaufgangs-Option |
+| Fenster-Interaktion | Kippen → Lüftungsposition, Öffnen → ganz auf (optional: wie Kippen behandeln); nach dem Schließen zurück in die Ausgangsposition                                         | Fenstersensor                                                        |
+| Nachtmodus          | Schließt beim Einschalten des Helfers (wahlweise auf eine Nacht-Zielposition statt ganz zu); offene/gekippte Fenster bekommen eine Lüftungsposition                      | `input_boolean`, Zeitplan oder Binärsensor                           |
+| Sturmschutz         | Fährt bei Starkwind hoch (oder im Panzer-Modus herunter)                                                                                                                 | Wetter-Entität oder Wind-Sensor                                      |
+| Sonnenschutz        | Beschattet anhand des Sonnenstands so, dass die Sonne höchstens X m in den Raum fällt; öffnet nach Ende wieder; optional an eine Freigabe-Entität (PV, Lux, …) gekoppelt | Status-Helfer, Geometrie, Temperaturquelle                           |
+| Sonnenheizen        | Öffnet im Winter vergessene Rollos, wenn Sonne ins Fenster scheint und es kalt ist                                                                                       | eigener Status-Helfer, Geometrie                                     |
+| Frostschutz         | Begrenzt bei Frost die automatischen Aufwärts-Fahrten (außer bei Sturm) auf eine schonende Maximal-Position (festgefrorener Panzer)                                      | Außentemperatur-Sensor                                               |
+| Moskito-Modus       | Schaltet beim Fensteröffnen nach Sonnenuntergang die Lichter im Raum aus (mit Ausnahmen)                                                                                 | Fenstersensor                                                        |
+| Benachrichtigungen  | Meldet zu lange offene/gekippte Fenster aufs Handy, mit "Rollladen schließen"-Button; verschwindet automatisch beim Schließen                                            | Companion-App-Geräte, Fenstersensor                                  |
+| Pausieren           | Hält die komplette Automation an, solange ein Helfer eingeschaltet ist — z.B. während Videoaufnahmen oder wenn Gäste schlafen                                            | `input_boolean`-Helfer (optional)                                    |
 
 **Prioritäten:** Der **Sturmschutz gewinnt immer** — bei Starkwind bewegen weder
 Morgens-Öffnen noch Beschattung, Sonnenheizen oder das Zurückfahren den Rollladen,
 und auch der Pausier-Helfer hält ihn nicht auf (Schutz der Hardware geht vor).
 Danach kommt die Pause (solange ihr Helfer an ist, passiert sonst gar nichts),
 dann der Nachtmodus (nachts wird nicht beschattet, nicht geheizt und beim
-Fensteröffnen nur bis zur Lüftungsposition geöffnet), dann erst die Komfort-Features.
-Der **Frostschutz** ist keine eigene Fahrt, sondern eine Obergrenze für deren
-Öffnungsfahrten — den Sturmschutz begrenzt er bewusst nicht.
+Fensteröffnen nur bis zur Lüftungsposition geöffnet), dann der Frostschutz als
+Begrenzer aller Öffnungs-Fahrten, dann erst die Komfort-Features.
 
 ## Verhalten verstehen
+
+### Morgens öffnen: Uhrzeit, Sonnenaufgang, Bewegung
+
+Der Klassiker ist die feste Uhrzeit über den `input_datetime`-Helfer. Mit
+**"Mit dem Sonnenaufgang öffnen"** kommt die Astro-Variante dazu: Geöffnet wird zum
+Sonnenaufgang (plus/minus einstellbarer Verschiebung), aber **nie vor** der
+eingestellten Uhrzeit — es gilt der spätere der beiden Zeitpunkte. Im Sommer schützt
+die Uhrzeit also vor dem 5-Uhr-Sonnenaufgang, im Winter wartet das Öffnen auf die
+tatsächliche Helligkeit. Ohne gesetzten Uhrzeit-Helfer zählt allein der Sonnenaufgang.
+
+Ein aktiver **Nachtmodus hat dabei Vorrang**: Liegt der Öffnungszeitpunkt noch im
+Nacht-Block (Sommer-Sonnenaufgang um 5, Schedule sagt bis 6:30 Nacht), öffnet der
+Rollladen nicht — stattdessen holt das **Ende des Nachtmodus** das verpasste Öffnen
+nach. Ein Zeitplan-Helfer als Nachtmodus steuert damit beides: Schließen zum
+Blockbeginn, Öffnen zum Blockende (sofern der reguläre Öffnungszeitpunkt schon
+vorbei ist).
+
+Für selten genutzte Räume (Gästezimmer, Hobbyraum) gibt es **"Morgens nur bei
+Bewegung öffnen"**: Mit gesetztem Bewegungs-/Präsenzsensor öffnet der Rollladen
+morgens nicht automatisch, sondern erst bei der ersten Bewegung im Raum — frühestens
+zur Uhrzeit-Untergrenze, nur tagsüber, nicht bei aktivem Nachtmodus und nur, solange
+der Rollladen noch (nacht-)geschlossen ist. Wird der Raum den ganzen Tag nicht
+betreten, bleibt der Rollladen unten und auch die Abend-Fahrt entfällt (er ist ja
+schon zu).
+
+### Frostschutz
+
+Bei Minusgraden frieren Rollladenpanzer gern am Fensterbrett oder in den
+Führungsschienen fest; fährt der Motor dann auf Anschlag, reißen Gurt oder Lamellen.
+Sobald ein Außentemperatur-Sensor im Frostschutz-Abschnitt gesetzt ist (es darf
+derselbe sein wie beim Sonnenschutz), werden bei Temperaturen auf/unter der Schwelle
+**die automatischen Aufwärts-Fahrten** — Morgens-Öffnen, das Hochfahren beim Lüften,
+das Ende der Beschattung und Sonnenheizen — auf die eingestellte Maximal-Position
+(Standard 90 %) begrenzt. Die letzten Prozent, die den festgefrorenen Panzer
+abreißen würden, entfallen. Schließen ist immer uneingeschränkt erlaubt; eine
+Hysterese braucht es nicht, weil nur einzelne Fahrten begrenzt werden und nichts
+zyklisch nachregelt.
+
+Ausnahme ist die **Sturm-Öffnung**: Sie fährt auch bei Frost ganz hoch. Ein teilweise
+heruntergelassener Panzer bietet dem Wind Angriffsfläche und flattert bzw. schlägt in
+den Schienen; ganz eingefahren liegt er geschützt im Kasten — der Sturmschutz hat
+Vorrang.
 
 ### Sichtfeld und Geometrie
 
@@ -90,6 +144,33 @@ Glas-Endpunkt im Sonnenschutz-Abschnitt) rechnet die Beschattung in echter Glasf
 Aufsetz-Punkt ermitteln = Rollladen langsam herunterfahren, bis der Lichtspalt unten
 gerade verschwindet. Netter Nebeneffekt: Die Beschattung fährt dann nie unter den
 Aufsetz-Punkt — die Lamellen bleiben immer offen.
+
+### Freigabe-Entität: PV, Helligkeit & Co. an die Beschattung koppeln
+
+Die Beschattung rechnet bewusst nur mit Sonnenstand, Temperatur und (optional)
+Wetterlage. Für alles darüber hinaus gibt es die **Freigabe-Entität**: Ist dort eine
+Entität gesetzt, beschattet die Automation nur, solange diese "on" ist — und beendet
+eine laufende Beschattung, wenn sie mindestens 10 Minuten stabil "off" ist. Damit
+lässt sich jede eigene Bedingung anbinden, ohne dass das Blueprint sie kennen muss.
+Zwei Beispiele als Template-Binärsensor in der `configuration.yaml`:
+
+```yaml
+template:
+  - binary_sensor:
+      # Beschattung nur bei echter Einstrahlung (PV-Leistung als Sonnen-Beweis)
+      - name: "Beschattung erlaubt (PV)"
+        state: "{{ states('sensor.pv_leistung') | float(0) > 2000 }}"
+        delay_off: "00:10:00"
+      # Beschattung nur ab einer Helligkeit (Lux-Sensor)
+      - name: "Beschattung erlaubt (Helligkeit)"
+        state: "{{ states('sensor.helligkeit_terrasse') | float(0) > 40000 }}"
+        delay_off: "00:10:00"
+```
+
+Ein `delay_off` im Sensor glättet zusätzlich; die 10-Minuten-Trägheit im Blueprint
+verhindert in jedem Fall, dass eine flatternde Quelle den Rollladen im
+5-Minuten-Takt fahren lässt. Bei "unavailable" startet keine neue Beschattung, eine
+laufende bleibt bestehen.
 
 ### Manuelle Eingriffe während der Beschattung
 
@@ -123,39 +204,6 @@ Wandtaster kam (die Positions-Rückmeldung kommt immer vom Gerät selbst). Ein
 neustartfest zu speichern — und genau darauf bauen das automatische Wiederöffnen,
 die Einmal-Logik des Sonnenheizens und die Eingriffs-Erkennung auf.
 
-### Frostschutz
-
-Bei Frost kann der Panzer im Kasten oder in den Führungsschienen festfrieren — fährt
-der Motor dann ganz hoch, reißt er daran. Mit aktiviertem Frostschutz öffnet die
-Automatik deshalb höchstens bis zur Frost-Position (Standard 90 %), solange die
-Außentemperatur bei oder unter der Schwelle liegt (Standard 0 °C). Das betrifft:
-
-- **Morgens öffnen:** Ziel ist der kleinere Wert aus Zielposition und Frost-Position;
-  gefahren wird weiterhin nur, wenn der Rollladen tiefer steht.
-- **Fenster öffnen:** Der Rollladen fährt auf die Frost-Position statt ganz auf —
-  steht er schon höher, bleibt er stehen.
-- **Ende der Beschattung** und **Sonnenheizen:** Die jeweilige Zielposition wird auf
-  die Frost-Position begrenzt.
-
-Die Temperatur kommt aus derselben Quelle wie bei Sonnenschutz und Sonnenheizen: dem
-Außentemperatur-Sensor im Sonnenschutz-Abschnitt, sonst dem `temperature`-Attribut der
-Wetter-Entität im Sturmschutz-Abschnitt. Beide Felder wirken auch, wenn Sonnenschutz
-bzw. Sturmschutz selbst ausgeschaltet sind. Ist keine Quelle gesetzt oder gerade nicht
-verfügbar, greift der Frostschutz nicht.
-
-Eine Hysterese braucht es nicht: Die Temperatur wird nur im Moment einer Öffnungsfahrt
-geprüft, es gibt keinen Dauerzustand, der beim Über- oder Unterschreiten der Schwelle
-nachgefahren würde. Pendelt die Temperatur um die Schwelle, entscheidet sie nur, ob die
-nächste Öffnung an der Frost-Position oder an der normalen Zielposition endet — ein
-Auf und Ab entsteht dadurch nicht. Umgekehrt holt die Automation nach dem Frost nichts
-nach: Der Rollladen bleibt auf der Frost-Position, bis ihn das nächste reguläre
-Ereignis bewegt.
-
-Der **Sturmschutz** fährt auch bei Frost ganz hoch. Ein teilweise heruntergelassener
-Panzer bietet dem Wind Angriffsfläche und schlägt in den Schienen, der eingefahrene
-Panzer ist im Kasten geschützt — Schutz vor Wind hat Vorrang. Im Panzer-Modus
-(schließen bei Sturm) stellt sich die Frage ohnehin nicht.
-
 ## Bekannte Grenzen
 
 - **Wind-Sensor kurz nicht verfügbar** zählt als "windstill". Bewusste Entscheidung:
@@ -165,38 +213,90 @@ Panzer ist im Kasten geschützt — Schutz vor Wind hat Vorrang. Im Panzer-Modus
   (z. B. Regen ↔ Starkregen), beendet erst Sonnenstand oder Temperatur die
   Beschattung. Der Filter beendet nur bei mindestens 10 Minuten stabil schlechter Lage.
 - **Cover ohne Positions-Angabe** (nur auf/zu): Morgens-Öffnen funktioniert,
-  Kipp-Position und Beschattung werden übersprungen — sie brauchen Positionsdaten.
-  Auch der Frostschutz kann solche Cover nicht begrenzen: Öffnen heißt hier immer
-  ganz auf.
-- **Frostschutz:** Kipp- und Nachtlüftungs-Position werden nicht begrenzt (sie liegen
-  normalerweise weit unter der Frost-Position), ebenso wenig das Zurückfahren nach dem
-  Lüften (es stellt nur die Position von vorher wieder her). Auch die Nachführung der
-  Beschattung bleibt unbegrenzt — sie startet erst ab der Beschattungs-Schwelle
-  (mindestens 10 °C). Ohne verfügbare Temperaturquelle greift der Frostschutz nicht.
+  Kipp-Position, Beschattung, Nacht-Zielposition und Frost-Begrenzung werden
+  übersprungen — sie brauchen Positionsdaten.
 - **Windgeschwindigkeit** wird roh mit dem Grenzwert verglichen — liefert deine Quelle
   m/s statt km/h, muss der Grenzwert entsprechend gesetzt werden.
 - **Sturm-Ende:** Nach dem Sturm bleibt der Rollladen in der Schutzposition, bis das
   nächste reguläre Ereignis (Nachtmodus, Morgens, Beschattung) ihn übernimmt.
+- **Bewegungs-Öffnen** reagiert auf jede Bewegung, solange seine Bedingungen stimmen:
+  Wird der Rollladen tagsüber von Hand wieder komplett geschlossen und dann der Raum
+  betreten, öffnet er erneut. Wer das nicht will, nutzt den Pausier-Helfer.
+- **Frostschutz** begrenzt die automatischen Fahrten, nicht das Zurückfahren auf eine
+  gemerkte Ausgangsposition nach dem Lüften (die war ja bereits erreicht).
 
 ## FAQ
+
+**Der Import schlägt fehl mit "mapping values are not allowed here"?** Dann wurde die
+Repository-URL statt der Blueprint-URL importiert. Richtig ist die Datei-URL:
+`https://github.com/TheRealSimon42/ha-blueprints/blob/main/automations/cover_automation_v2.yaml`
+— am einfachsten über den Import-Button oben.
 
 **Was bedeuten 0 % und 100 % bei den Positionen?** Das Blueprint folgt der
 Home-Assistant-Konvention: 100 % = ganz offen, 0 % = ganz geschlossen. Die Prozente
 sind dabei die Werte deines Cover-Aktors, also Motor-Laufweg — nicht zwingend
 Glasfläche. Für die Beschattung lässt sich dieser Unterschied über die
 Glas-Kalibrierung (siehe oben) ausgleichen; alle anderen Positions-Eingaben
-(morgens, Kipp-Position, Nachtlüftung, Frost-Position) sind bewusst direkte Aktor-Werte.
+(morgens, Kipp-Position, Nachtlüftung) sind bewusst direkte Aktor-Werte.
+
+**Ich habe gar keinen Fenstersensor — geht das?** Ja, das Feld einfach leer lassen.
+Morgens-Öffnen, Nachtmodus, Sturmschutz, Beschattung, Sonnenheizen und Frostschutz
+funktionieren ohne; nur Fenster-Interaktion, Benachrichtigungen und Moskito-Modus
+brauchen den Sensor. Der früher nötige "Fake-Fensterkontakt"-Workaround ist damit
+überflüssig.
+
+**Mehrere Kontakte an einem Rollladen (Doppelflügel, Fliegengittertür)?** In Home
+Assistant eine **Binärsensor-Gruppe** anlegen (_Helfer → Gruppe → Binärsensor-Gruppe_)
+und der Gruppe die Geräteklasse "Fenster" geben — dann taucht sie im Sensor-Feld auf.
+Die Gruppe ist "offen", sobald ein Kontakt offen ist: Der Rollladen fährt erst zu,
+wenn alle Flügel (und die Fliegengittertür) geschlossen sind. Drei-Zustands-Logik
+(gekippt) geht dabei verloren — die Gruppe kennt nur offen/zu.
+
+**Mein Sensor meldet `Open`/`Closed`/`Tilted` mit Großbuchstaben?** Wird ab dieser
+Version automatisch verstanden — Groß-/Kleinschreibung spielt keine Rolle mehr.
+
+**Abends automatisch schließen — auch mit Sonnenuntergang?** Das ist die Aufgabe des
+Nachtmodus-Helfers, und der kann jetzt mehr als `input_boolean`: Ein
+**Zeitplan-Helfer** schließt zur festen Uhrzeit (auch mit unterschiedlichen Zeiten je
+Wochentag — Wochenende!) und öffnet zum Blockende, falls der reguläre
+Öffnungszeitpunkt in den Nacht-Block fiel. Für Sonnenuntergangs-Logik einen Template-Binärsensor
+anlegen und als Nachtmodus-Helfer auswählen, z. B. "an ab 30 min nach Sonnenuntergang,
+aus ab 07:00":
+
+```yaml
+template:
+  - binary_sensor:
+      - name: "Nacht (Sonnenuntergang bis 7 Uhr)"
+        state: >
+          {{ state_attr('sun.sun', 'elevation') | float(0) < -4
+             or now().hour < 7 }}
+```
+
+**Urlaubsmodus / Anwesenheitssimulation?** Über den Pausier-Helfer lösbar: Ein
+`input_boolean` "Urlaub" (von der eigenen Anwesenheits-Logik geschaltet) pausiert mit
+"AN pausiert" die normale Instanz. Wer im Urlaub andere Zeiten fahren will, legt eine
+zweite Instanz desselben Fensters mit eigenem Zeit-Helfer an und trägt dort denselben
+Urlaubs-Helfer mit "AUS pausiert" ein — so läuft immer genau eine der beiden.
+
+**Rauchmelder / Alarm — alle Rollos hoch?** Bewusst nicht im Blueprint: Ein Brandalarm
+ist ein Haus-Ereignis, kein Pro-Fenster-Verhalten. Eine einzige kleine Automation ist
+robuster: Trigger Rauchmelder → `cover.open_cover` auf alle Rollladen-Entitäten (plus
+Licht an, Türen entriegeln — was immer der Fluchtweg braucht). Sie übersteuert die
+Blueprint-Instanzen einfach; deren Eingriffs-Erkennung stört sich daran nicht.
 
 **Die Beschattung tut nichts — warum?** Prüfe in dieser Reihenfolge: Gibt es eine
 Benachrichtigung wegen fehlendem Status-Helfer? Ist eine Temperaturquelle gesetzt
 (eigener Sensor oder Wetter-Entität im Sturmschutz-Abschnitt)? Liegt die
 Außentemperatur über der Schwelle, steht die Sonne im Sichtfeld (Ausrichtung
-korrekt?), und ist das Fenster nicht komplett offen?
+korrekt?), ist eine gesetzte Freigabe-Entität "on", und ist das Fenster nicht
+komplett offen?
 
 **Warum fährt der Rollladen nach dem Lüften zurück?** Beim Öffnen des Fensters merkt
 sich die Automation die Ausgangsposition und stellt sie nach dem Schließen wieder her
-(innerhalb des einstellbaren Zeitfensters). Kam inzwischen Nachtmodus oder Sturm,
-wird stattdessen deren Zustand hergestellt.
+(innerhalb des einstellbaren Zeitfensters). Kam inzwischen Nachtmodus, Sturm oder das
+morgendliche Öffnen, wird stattdessen deren Zustand hergestellt — die gemerkte
+Position gilt als veraltet, sobald die Automatik den Rollladen aus anderem Grund
+legitim bewegt hat.
 
 **Kann ich denselben Status-Helfer für mehrere Fenster verwenden?** Nein — er
 speichert den Zustand genau eines Fensters. Ein geteilter Helfer führt zu falschem
@@ -217,7 +317,7 @@ Kipp-Position statt komplett auf, und die Beschattung läuft weiter, statt zu
 pausieren. Typischer Fall: das Badfenster mit einfachem binärem Kontakt.
 
 **Kann ich die Automation zeitweise anhalten?** Ja — im Abschnitt "Pausieren" einen
-einen oder mehrere `input_boolean`-Helfer auswählen. Die Logik ist wählbar: "AN
+oder mehrere `input_boolean`-Helfer auswählen. Die Logik ist wählbar: "AN
 pausiert" für Helfer wie "Aufnahme läuft", oder "AUS pausiert" für Aktiv-Schalter
 fürs Dashboard ("Rollladensteuerung aktiv" — an heißt: die Automatik läuft). Bei
 mehreren Helfern pausiert die Automatik nur, wenn alle gleichzeitig im
