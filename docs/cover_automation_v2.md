@@ -1346,6 +1346,16 @@ Rollladen hochfährt. Die Reaktionszeit gilt auch für den Moskito-Modus und das
 Abräumen der Benachrichtigung, nicht aber für die Wartezeit, nach der eine
 Benachrichtigung verschickt wird.
 
+**Beim Kippen fährt der Rollladen erst ganz hoch — warum?** Viele Fenstergriff-
+Sensoren (z. B. mit Drehwinkel-Erkennung) melden beim Drehen des Griffs von "zu" auf
+"gekippt" für 2–3 Sekunden "offen", weil der Griff dabei die waagerechte
+Offen-Stellung durchläuft. Ist die Reaktionszeit kürzer, reagiert die Automation auf
+dieses kurze "offen" und fährt den Rollladen ganz hoch, bevor "gekippt" ankommt.
+Abhilfe: Reaktionszeit auf 5 Sekunden stellen. Die Ausgangsposition fürs spätere
+Zurückfahren wird trotzdem korrekt gemerkt — ein Zwischenzustand, der kürzer als die
+Reaktionszeit anlag, zählt dafür wie "geschlossen". Wie lange dein Sensor "offen"
+meldet, zeigt der Verlauf des Fenstersensors.
+
 **Alle Rollläden fahren auf die Minute gleichzeitig — geht das unauffälliger?** Ja:
 Mit dem Regler "Zufällige Verzögerung (max.)" bei "Morgens öffnen" und im Nachtmodus
 fährt jeder Rollladen zufällig bis zu X Minuten später. Details und ein Rezept für
