@@ -1176,7 +1176,8 @@ triggers:
     id: pause_ended
   # Hindernis-Sperre aufgehoben: feuert pro Sensor, der die Wartezeit lang aus
   # ist — ob wirklich ALLE frei sind, prüft der Zweig. Ohne from:, damit auch
-  # unavailable/unknown → aus (gilt als Hindernis) die Sperre beenden kann
+  # unavailable/unknown → aus (gilt als Hindernis) die Sperre beenden kann;
+  # ob danach etwas nachzuholen ist, entscheidet ebenfalls der Zweig
   - trigger: state
     entity_id: !input block_sensors
     to: "off"
@@ -1566,6 +1567,21 @@ actions:
           # sind und auch der zuletzt ausgeschaltete die Wartezeit hinter sich hat
           # (sonst erledigt das später dessen eigener Trigger)
           - "{{ not block_active }}"
+          # Nur nach einer ECHTEN Sperre nachholen: Wechselt ein Sensor nach einem
+          # Neustart oder Funk-Aussetzer von unavailable/unknown auf aus, war meist
+          # nichts gesperrt — sonst würde ein nachts von Hand geöffneter Rollladen
+          # zugefahren, und die Beschattung vergäße manuelle Eingriffe. Ein Ausfall
+          # zählt deshalb nur, wenn der Nachtmodus erst währenddessen eingeschaltet
+          # wurde (dessen Fahrt hat er dann gesperrt). 5 Minuten Abstand, weil ein
+          # Neustart alle Zeitstempel neu setzt und Ausfall und Nachtmodus dann
+          # dicht beieinanderliegen
+          - >-
+            {{ trigger.from_state is not none
+               and (trigger.from_state.state == 'on'
+                    or (night_mode_boolean is string
+                        and is_state(night_mode_boolean, 'on')
+                        and as_timestamp(states[night_mode_boolean].last_changed)
+                            > as_timestamp(trigger.from_state.last_changed) + 300)) }}
         sequence:
           # Beschattungs-Status freigeben: Während der Sperre wurde nicht
           # nachgeführt — ohne Freigabe würde der erste Tick die Abweichung als
@@ -1905,6 +1921,13 @@ actions:
                   - action: input_boolean.turn_on
                     target:
                       entity_id: "{{ solar_heating_status_helper }}"
+                  # Hindernis-Sperre: Liegt das (frostbegrenzte) Ziel unter dem
+                  # Rollladen, wäre das eine Fahrt nach unten — dann stehen bleiben
+                  - condition: >-
+                      {{ not block_active
+                         or state_attr(cover_entity, 'current_position') | int(101)
+                            <= ([solar_heating_position | int(100), frost_max_position | int(100)] | min
+                                if frost_active else solar_heating_position | int(100)) }}
                   - action: cover.set_cover_position
                     target:
                       entity_id: !input cover
