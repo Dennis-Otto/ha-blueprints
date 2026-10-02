@@ -65,7 +65,7 @@ Fenster, bis der Helfer gesetzt oder das Feature deaktiviert ist.
 | Sonnenheizen        | Öffnet im Winter vergessene Rollos, wenn Sonne ins Fenster scheint und es kalt ist                                                                                       | eigener Status-Helfer, Geometrie                                     |
 | Frostschutz         | Begrenzt bei Frost alle automatischen Aufwärts-Fahrten auf eine schonende Maximal-Position (festgefrorener Panzer)                                                       | Außentemperatur-Sensor                                               |
 | Moskito-Modus       | Schaltet beim Fensteröffnen nach Sonnenuntergang die Lichter im Raum aus (mit Ausnahmen)                                                                                 | Fenstersensor                                                        |
-| Benachrichtigungen  | Meldet zu lange offene/gekippte Fenster aufs Handy (Schließen-Button, räumt sich selbst ab); optional Erinnerungen, Alexa & Co.                                          | Companion-App-Geräte oder Notify-Dienste, Fenstersensor              |
+| Benachrichtigungen  | Meldet zu lange offene/gekippte Fenster aufs Handy, mit "Rollladen schließen"-Button; verschwindet automatisch beim Schließen; optional Erinnerungen, Alexa & Co.        | Companion-App-Geräte oder Notify-Dienste, Fenstersensor              |
 | Pausieren           | Hält die komplette Automation an, solange ein Helfer eingeschaltet ist — z.B. während Videoaufnahmen oder wenn Gäste schlafen                                            | `input_boolean`-Helfer (optional)                                    |
 
 **Prioritäten:** Der **Sturmschutz gewinnt immer** — bei Starkwind bewegen weder
