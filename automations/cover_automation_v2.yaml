@@ -176,6 +176,10 @@ blueprint:
             entsprechend später — bei Balkon- und Terrassentüren wartet man beim
             Rausgehen länger. 2 = bisheriges Verhalten. Die Wartezeiten, nach
             denen eine Benachrichtigung verschickt wird, sind davon unabhängig.
+            Tipp: Viele Fenstergriff-Sensoren melden beim Drehen von "zu" auf
+            "gekippt" für 2–3 Sekunden "offen". Liegt die Reaktionszeit darunter,
+            fährt der Rollladen bei jedem Kippen erst ganz auf — dann 5 Sekunden
+            einstellen.
           default: 2
           selector:
             number:
@@ -832,6 +836,7 @@ variables:
   cover_entity: !input cover
   window_sensor: !input window_sensor
   tilted_position: !input tilted_position
+  window_reaction_delay: !input window_reaction_delay
   open_position: !input open_position
   reclose_timeout: !input reclose_timeout
   force_close: !input force_close
@@ -1544,13 +1549,21 @@ actions:
           # überschreibt Kippen→Öffnen den Snapshot mit der Kipp-Position. Nach
           # unavailable/unknown nur sichern, wenn noch KEIN Snapshot existiert:
           # nach einem HA-Neustart fehlt er (Szene weg), aber bei einem Sensor-Blip
-          # am offenen Fenster würde er sonst mit der Offen-Position überschrieben
+          # am offenen Fenster würde er sonst mit der Offen-Position überschrieben.
+          # Ein Zwischenzustand, der kürzer als die Reaktionszeit anlag, zählt wie
+          # "geschlossen": Fenstergriff-Sensoren melden beim Drehen von zu nach
+          # gekippt kurz "offen" — dieser Zustand hat keinen eigenen Lauf ausgelöst,
+          # das Fenster war davor also zu
           - if:
               - >-
                 {{ trigger.from_state is not none
                    and (trigger.from_state.state in ['off', 'closed']
                         or (trigger.from_state.state in ['unavailable', 'unknown']
-                            and expand(reclose_scene) | count == 0)) }}
+                            and expand(reclose_scene) | count == 0)
+                        or (trigger.from_state.state in ['on', 'open', 'tilted']
+                            and as_timestamp(trigger.to_state.last_changed)
+                                - as_timestamp(trigger.from_state.last_changed)
+                                < window_reaction_delay | float(2))) }}
             then:
               - action: scene.create
                 data:
