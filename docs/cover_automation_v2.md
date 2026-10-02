@@ -77,8 +77,10 @@ Fensteröffnen nur bis zur Lüftungsposition geöffnet), dann der Frostschutz al
 Begrenzer aller Öffnungs-Fahrten, dann erst die Komfort-Features.
 
 Die optionale **Sturm-Entwarnung** gehört nicht zum Hardware-Schutz: Während einer
-Pause entfällt sie, und sie stellt nur den Zustand her, den Nachtmodus bzw.
-Morgens-Öffnen ohnehin vorgeben.
+Pause entfällt sie. Nachts holt sie den Nachtzustand nach; tagsüber öffnet sie im
+Panzer-Modus einen noch geschlossenen Rollladen auf die Zielposition für morgens —
+auch bei ausgeschaltetem Morgens-Öffnen und auch dann, wenn er schon vor dem Sturm
+geschlossen war (siehe Bekannte Grenzen).
 
 ## Verhalten verstehen
 
@@ -220,13 +222,15 @@ ununterbrochen unter dem Grenzwert lag:
   Zielposition für morgens (nur aufwärts, bei Frost begrenzt wie morgens; bei offenem
   Fenster nur mit "Aktion bei Sturm erzwingen", wie beim Sturmschutz selbst). Hat ihn
   inzwischen die Beschattung übernommen oder jemand von Hand bewegt, bleibt er, wo er
-  ist. Mit "Morgens nur bei Bewegung öffnen" bleibt er ebenfalls zu — das Öffnen
-  übernimmt dann wie morgens die nächste Bewegung im Raum.
+  ist. Mit "Morgens nur bei Bewegung öffnen" öffnet sie nur, wenn der Sensor gerade
+  Bewegung meldet; sonst bleibt er zu, und das Öffnen übernimmt wie morgens die
+  nächste Bewegung im Raum.
 - **Tagsüber ohne Panzer-Modus:** Der Rollladen ist schon oben, es wird nichts gefahren.
 
 Den Beschattungs-Status hat schon der Sturmschutz freigegeben, der nächste Tick
 beschattet also bei Bedarf. "Tagsüber" heißt: Nachtmodus aus, Sonne über dem Horizont
-und die Uhrzeit fürs Morgens-Öffnen (falls eingerichtet) vorbei. Sonst bleibt der
+und bei aktivem Morgens-Öffnen dessen Zeitpunkt vorbei (die Uhrzeit, im
+Sonnenaufgangs-Modus auch Sonnenaufgang plus Verschiebung). Sonst bleibt der
 Rollladen in der Sturmposition, bis das nächste reguläre Ereignis ihn übernimmt.
 Entwarnt wird nur nach einem echten Unterschreiten des Grenzwerts — meldet die Quelle
 nach einem Neustart oder Aussetzer erstmals einen niedrigen Wert, ist das keine

@@ -798,11 +798,13 @@ blueprint:
             Nacht-Zielposition oder Lüftungsposition). Tagsüber öffnet sie im
             Panzer-Modus einen noch geschlossenen Rollladen auf die Zielposition
             für morgens (Fensterregel wie beim Sturmschutz, nicht während laufender
-            Beschattung und nicht mit "Morgens nur bei Bewegung öffnen"); ohne
-            Panzer-Modus bleibt er oben. "Tagsüber" heißt: Nachtmodus aus, Sonne
-            über dem Horizont und die Uhrzeit fürs Morgens-Öffnen (falls
-            eingerichtet) vorbei. Ist ein Wind-Sensor gesetzt, entscheidet nur er.
-            Während einer Pause entfällt die Entwarnung.
+            Beschattung; mit "Morgens nur bei Bewegung öffnen" nur, wenn der Sensor
+            gerade Bewegung meldet); ohne Panzer-Modus bleibt er oben. "Tagsüber"
+            heißt: Nachtmodus aus, Sonne über dem Horizont und bei aktivem
+            Morgens-Öffnen dessen Zeitpunkt vorbei (Uhrzeit, im
+            Sonnenaufgangs-Modus auch Sonnenaufgang plus Verschiebung). Ist ein
+            Wind-Sensor gesetzt, entscheidet nur er. Während einer Pause entfällt
+            die Entwarnung.
             0 = keine Entwarnung — der Rollladen bleibt nach dem Sturm in der
             Schutzposition, bis ein reguläres Ereignis ihn übernimmt (bisheriges
             Verhalten).
@@ -1479,14 +1481,27 @@ actions:
         sequence:
           - variables:
               release_night: "{{ night_mode_boolean is string and is_state(night_mode_boolean, 'on') }}"
-              # Tagsüber = Nachtmodus aus, Sonne über dem Horizont und Morgens-Uhrzeit
-              # (falls eingerichtet) vorbei — im Zweifel lieber zu lassen als im
-              # Dunkeln oder vor der Weckzeit öffnen
+              # Tagsüber = Nachtmodus aus, Sonne über dem Horizont und bei aktivem
+              # Morgens-Öffnen dessen Zeitpunkt vorbei — im Zweifel lieber zu lassen
+              # als im Dunkeln oder vor der Weckzeit öffnen. sun_gate und time_gate
+              # wie im Morgens-Zweig: Uhrzeit-Untergrenze erreicht und im
+              # Sonnenaufgangs-Modus zusätzlich Sonnenaufgang + Offset
               release_daytime: >-
-                {% set mt = morning_time_entity if morning_enabled and morning_time_entity is string else '' %}
-                {% set morning_passed = not mt or not has_value(mt)
-                   or state_attr(mt, 'has_date') or now() >= today_at(states(mt)) %}
-                {{ not release_night and morning_passed and is_state('sun.sun', 'above_horizon') }}
+                {% set nr_raw = state_attr('sun.sun', 'next_rising') %}
+                {% if nr_raw is none %}
+                  {% set sun_gate = is_state('sun.sun', 'above_horizon') %}
+                {% else %}
+                  {% set nr = as_datetime(nr_raw) %}
+                  {% set sunrise_today = nr if is_state('sun.sun', 'below_horizon') else nr - timedelta(hours=24) %}
+                  {% set sun_gate = now() >= sunrise_today + timedelta(minutes=morning_sun_offset | int(0)) %}
+                {% endif %}
+                {% set time_gate = not (morning_time_entity is string
+                                        and has_value(morning_time_entity)
+                                        and state_attr(morning_time_entity, 'has_time'))
+                                   or now() >= today_at(states(morning_time_entity).split(' ')[-1]) %}
+                {{ not release_night
+                   and is_state('sun.sun', 'above_horizon')
+                   and (not morning_enabled or (time_gate and (not morning_use_sun or sun_gate))) }}
               # Frostschutz wie morgens: Aufwärtsfahrt bei Frost auf die schonende
               # Maximal-Position begrenzen (festgefrorener Panzer)
               release_target: >-
@@ -1540,7 +1555,9 @@ actions:
               # hoch und der nächste Tick gleich wieder herunter. Der Sturm-Zweig hat
               # den Status bereits freigegeben, der nächste Tick beschattet bei Bedarf.
               # Im Bewegungs-Modus öffnet wie morgens erst die nächste Bewegung im
-              # Raum — ein den ganzen Tag ungenutzter Raum bleibt sonst nicht zu
+              # Raum — ein den ganzen Tag ungenutzter Raum bleibt sonst nicht zu.
+              # Meldet der Sensor schon "on", käme keine neue Flanke mehr: Dann ist
+              # jemand im Raum und die Entwarnung darf öffnen
               - conditions:
                   - "{{ panzer_mode and release_daytime }}"
                   - >-
@@ -1549,7 +1566,10 @@ actions:
                        or (states(window_sensor) | lower) in ['off', 'closed'] }}
                   - "{{ is_state(cover_entity, 'closed') }}"
                   - "{{ not (shading_status_helper is string and is_state(shading_status_helper, 'on')) }}"
-                  - "{{ not (morning_enabled and morning_motion_sensor is string) }}"
+                  - >-
+                    {{ not (morning_enabled
+                            and morning_motion_sensor is string
+                            and not is_state(morning_motion_sensor, 'on')) }}
                 sequence:
                   - choose:
                       - conditions:
