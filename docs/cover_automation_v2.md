@@ -94,8 +94,8 @@ Nach oben begrenzt **"Spätestens öffnen um"** den Sonnenaufgangs-Modus: Liegt 
 Sonnenaufgang (plus Verschiebung) später, öffnet der Rollladen spätestens zu dieser
 Uhrzeit. Beispiel mit Uhrzeit 07:00, Obergrenze 08:00 und ohne Verschiebung: Im Juni
 öffnet er um 07:00, Anfang Oktober mit dem Sonnenaufgang gegen 07:30, im Dezember um
-08:00 statt erst gegen 08:30. Liegt die Obergrenze vor der Uhrzeit, gilt die Uhrzeit.
-Der Standard 00:00:00 bedeutet: keine Obergrenze.
+08:00 statt erst gegen 08:30. Liegt die Obergrenze vor oder gleich der Uhrzeit, gilt
+die Uhrzeit. Der Standard 00:00:00 bedeutet: keine Obergrenze.
 
 Ein aktiver **Nachtmodus hat dabei Vorrang**: Liegt der Öffnungszeitpunkt noch im
 Nacht-Block (Sommer-Sonnenaufgang um 5, Schedule sagt bis 6:30 Nacht), öffnet der

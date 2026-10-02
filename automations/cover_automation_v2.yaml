@@ -116,9 +116,9 @@ blueprint:
           description: >
             Obergrenze für "Mit dem Sonnenaufgang öffnen": Liegt der
             Sonnenaufgang (plus Verschiebung) später — im Winter —, öffnet der
-            Rollladen spätestens zu dieser Uhrzeit, aber nie vor der Uhrzeit
-            oben. 00:00:00 = keine Obergrenze. Ohne "Mit dem Sonnenaufgang
-            öffnen" ohne Wirkung.
+            Rollladen spätestens zu dieser Uhrzeit. Liegt sie vor oder gleich der
+            Uhrzeit oben, gilt die Uhrzeit. 00:00:00 = keine Obergrenze. Ohne "Mit
+            dem Sonnenaufgang öffnen" ohne Wirkung.
           default: "00:00:00"
           selector:
             time: {}
@@ -1049,10 +1049,13 @@ variables:
   # öffnen" der spätere von Uhrzeit und Sonnenaufgang + Verschiebung (diese
   # höchstens bis morning_latest), ohne beides der Sonnenaufgang (auch bei
   # abgeschaltetem Öffnen). Heutiger Sonnenaufgang: davor next_rising, danach
-  # der Wechsel von sun.sun auf über dem Horizont (last_changed, sekundengenau
-  # wie der Sonnen-Auslöser) — next_rising minus 24 h weicht bis zu ein paar
-  # Minuten ab und dient nur als Rückfall nach einem Neustart (abends ist
-  # next_rising der Aufgang von morgen, als Uhrzeit praktisch derselbe). Ohne
+  # der frühere von zwei Werten — dem Wechsel von sun.sun auf über dem
+  # Horizont (last_changed, sekundengenau wie der Sonnen-Auslöser) und
+  # next_rising minus 24 h (weicht um bis zu ein paar Minuten ab). Im Herbst
+  # gewinnt last_changed; im Frühjahr und nach einem Neustart (last_changed =
+  # Neustart) gilt der Schätzwert — die Nacht endet dann bis zu ein paar
+  # Minuten zu früh, nach einem Neustart im Herbst zu spät. Abends ist
+  # next_rising der Aufgang von morgen, als Uhrzeit praktisch derselbe. Ohne
   # Sonnendaten und ohne Morgens-Uhrzeit gibt es kein Ende und damit keinen
   # Nacht-Zustand (beim Sonnenstand auch kein Schließen). Als Liste statt
   # Ja/Nein, damit die Fenster-Interaktion nach dem Warten mit der Uhrzeit von
@@ -1396,9 +1399,13 @@ actions:
           # "Spätestens öffnen um" (morning_latest, nur im Sonnenaufgangs-Modus,
           # 00:00:00 = aus) deckelt den Sonnen-Zeitpunkt: Liegt er später
           # (sun_late), öffnet der eigene Auslöser zur Obergrenze statt des
-          # Sonnen-Auslösers — beide entscheiden über dieselbe Schätzung, damit
-          # genau einer öffnet. Liegt die Obergrenze vor der Uhrzeit, gilt die
-          # Uhrzeit (latest_gate).
+          # Sonnen-Auslösers. Beide nutzen die Schätzung von sun_gate; die hängt
+          # vom Horizont-Stand ab, deshalb kann bei einer Obergrenze nahe am
+          # Sonnenaufgang an einzelnen Tagen ein zweiter Lauf ein, zwei Minuten
+          # später folgen (ohne Bewegung, der Rollladen steht schon oben). Liegt
+          # die Obergrenze vor oder gleich der Uhrzeit, gilt die Uhrzeit
+          # (latest_gate); der Obergrenzen-Auslöser öffnet dann nicht — sonst
+          # feuerten bei Gleichstand beide in derselben Sekunde.
           - >-
             {% set nr_raw = state_attr('sun.sun', 'next_rising') %}
             {% if nr_raw is none %}
@@ -1423,7 +1430,11 @@ actions:
             {% elif trigger.id == 'morning_open_sun' %}
               {{ morning_use_sun and time_gate and not sun_late and not night_on }}
             {% elif trigger.id == 'morning_open_latest' %}
-              {{ morning_enabled and sun_late and time_gate and not night_on }}
+              {{ morning_enabled and sun_late and not night_on
+                 and not (morning_time_entity is string
+                          and has_value(morning_time_entity)
+                          and state_attr(morning_time_entity, 'has_time')
+                          and today_at(states(morning_time_entity).split(' ')[-1]) >= today_at(morning_latest)) }}
             {% elif trigger.id == 'morning_open_night_end' %}
               {{ ((morning_time_entity is string and has_value(morning_time_entity)) or morning_use_sun)
                  and time_gate
