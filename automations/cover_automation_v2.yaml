@@ -825,8 +825,9 @@ blueprint:
         Führungsschiene fest — fährt der Motor dann auf Anschlag, können Gurt
         oder Lamellen reißen. Der Frostschutz begrenzt deshalb alle
         automatischen AUFWÄRTS-Fahrten (morgens, Lüften, Sonnenheizen, Sturm)
-        auf eine schonende Maximal-Position, solange es friert. Schließen ist
-        immer erlaubt. Aktiv, sobald ein Temperatursensor ausgewählt ist.
+        auf eine schonende Maximal-Position, solange es friert (außer
+        Notfall-Öffnen). Schließen ist immer erlaubt. Aktiv, sobald ein
+        Temperatursensor ausgewählt ist.
       icon: mdi:snowflake-thermometer
       collapsed: true
       input:
@@ -859,9 +860,10 @@ blueprint:
         frost_max_position:
           name: Maximale Öffnungsposition bei Frost
           description: >
-            Höher als bis zu dieser Position fährt keine automatische Fahrt,
-            solange es friert — die letzten Prozent reißen den festgefrorenen
-            Panzer sonst vom Fensterbrett bzw. ziehen ihn gegen den Anschlag.
+            Höher als bis zu dieser Position fährt keine automatische Fahrt
+            (außer Notfall-Öffnen), solange es friert — die letzten Prozent
+            reißen den festgefrorenen Panzer sonst vom Fensterbrett bzw. ziehen
+            ihn gegen den Anschlag.
           default: 90
           selector:
             number:
@@ -1215,16 +1217,18 @@ triggers:
 actions:
   # Notfall: Solange ein Notfall-Sensor 'on' meldet, bewegt die Automatik nichts
   # und schaltet keine Lichter. Durch dürfen nur die Notfall-Trigger selbst und
-  # die Benachrichtigungen samt Abräumen (bewegen nichts)
+  # die Benachrichtigungen samt Abräumen (bewegen nichts; das Nacht-Nachholen
+  # im Abräum-Zweig prüft den Notfall selbst)
   - condition: >-
       {{ trigger.id | default('') in ['emergency_open', 'emergency_ended', 'window_open_long', 'window_tilted_long', 'window_closed']
          or not emergency_active }}
-  # Pausier-Helfer: hält die AUTOMATIK an, mit vier Ausnahmen — Notfall-Öffnen
+  # Pausier-Helfer: hält die AUTOMATIK an, mit fünf Ausnahmen — Notfall-Öffnen
   # (Sicherheit geht vor), Sturmschutz (Hardware-Schutz geht vor),
-  # Benachrichtigungs-Aufräumen (bewegt nichts) und der Notification-Knopf
-  # (ein bewusster Nutzer-Befehl, wie der Wandtaster)
+  # Benachrichtigungs-Aufräumen (bewegt nichts), der Notification-Knopf
+  # (ein bewusster Nutzer-Befehl, wie der Wandtaster) und das Notfall-Ende
+  # (holt in der Pause nur das Panzer-Schließen bei Sturm nach)
   - condition: >-
-      {{ trigger.id | default('') in ['emergency_open', 'storm_detected', 'window_closed', 'close_shutter_action']
+      {{ trigger.id | default('') in ['emergency_open', 'emergency_ended', 'storm_detected', 'window_closed', 'close_shutter_action']
          or not pause_active }}
   - choose:
       # --- MORGENS ÖFFNEN (Uhrzeit, Sonnenaufgang oder Bewegung) ---
@@ -1573,8 +1577,9 @@ actions:
           # wird nachgeholt, Sturm hat Vorrang (im Panzer-Modus wird das vom
           # Notfall verhinderte Schließen nachgeholt). Die Beschattung bewertet der
           # nächste Tick neu (Status-Helfer wurde beim Öffnen freigegeben).
-          # Läuft gerade eine Pause, sortiert das Gate oben diesen Lauf aus —
-          # dann holt das Pause-Ende den Nachtmodus nach
+          # In einer Pause wird nur das Panzer-Schließen nachgeholt (der
+          # Sturmschutz durchbricht die Pause) — den Nachtmodus holt dann das
+          # Pause-Ende nach
           - variables:
               wind_now: >-
                 {% if storm_wind_sensor is string %}
@@ -1603,6 +1608,7 @@ actions:
                         target:
                           entity_id: !input cover
               - conditions:
+                  - "{{ not pause_active }}"
                   - "{{ night_mode_boolean is string and is_state(night_mode_boolean, 'on') }}"
                 sequence:
                   - choose:

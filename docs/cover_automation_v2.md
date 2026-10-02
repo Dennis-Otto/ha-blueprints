@@ -63,7 +63,7 @@ Fenster, bis der Helfer gesetzt oder das Feature deaktiviert ist.
 | Sturmschutz         | Fährt bei Starkwind hoch (oder im Panzer-Modus herunter)                                                                                                                 | Wetter-Entität oder Wind-Sensor                                      |
 | Sonnenschutz        | Beschattet anhand des Sonnenstands so, dass die Sonne höchstens X m in den Raum fällt; öffnet nach Ende wieder; optional an eine Freigabe-Entität (PV, Lux, …) gekoppelt | Status-Helfer, Geometrie, Temperaturquelle                           |
 | Sonnenheizen        | Öffnet im Winter vergessene Rollos, wenn Sonne ins Fenster scheint und es kalt ist                                                                                       | eigener Status-Helfer, Geometrie                                     |
-| Frostschutz         | Begrenzt bei Frost alle automatischen Aufwärts-Fahrten auf eine schonende Maximal-Position (festgefrorener Panzer)                                                       | Außentemperatur-Sensor                                               |
+| Frostschutz         | Begrenzt bei Frost alle automatischen Aufwärts-Fahrten (außer Notfall-Öffnen) auf eine schonende Maximal-Position (festgefrorener Panzer)                                | Außentemperatur-Sensor                                               |
 | Moskito-Modus       | Schaltet beim Fensteröffnen nach Sonnenuntergang die Lichter im Raum aus (mit Ausnahmen)                                                                                 | Fenstersensor                                                        |
 | Benachrichtigungen  | Meldet zu lange offene/gekippte Fenster aufs Handy, mit "Rollladen schließen"-Button; verschwindet automatisch beim Schließen                                            | Companion-App-Geräte, Fenstersensor                                  |
 | Pausieren           | Hält die komplette Automation an, solange ein Helfer eingeschaltet ist — z.B. während Videoaufnahmen oder wenn Gäste schlafen                                            | `input_boolean`-Helfer (optional)                                    |
@@ -78,7 +78,8 @@ Pausier-Helfer hält ihn nicht auf (Schutz der Hardware geht vor).
 Danach kommt die Pause (solange ihr Helfer an ist, passiert sonst gar nichts),
 dann der Nachtmodus (nachts wird nicht beschattet, nicht geheizt und beim
 Fensteröffnen nur bis zur Lüftungsposition geöffnet), dann der Frostschutz als
-Begrenzer aller Öffnungs-Fahrten, dann erst die Komfort-Features.
+Begrenzer aller Öffnungs-Fahrten (außer Notfall-Öffnen), dann erst die
+Komfort-Features.
 
 ## Verhalten verstehen
 
@@ -112,12 +113,12 @@ Bei Minusgraden frieren Rollladenpanzer gern am Fensterbrett oder in den
 Führungsschienen fest; fährt der Motor dann auf Anschlag, reißen Gurt oder Lamellen.
 Sobald ein Außentemperatur-Sensor im Frostschutz-Abschnitt gesetzt ist (es darf
 derselbe sein wie beim Sonnenschutz), werden bei Temperaturen auf/unter der Schwelle
-**alle automatischen Aufwärts-Fahrten** — Morgens-Öffnen, das Hochfahren beim Lüften,
-Sonnenheizen und sogar die Sturm-Öffnung — auf die eingestellte Maximal-Position
-(Standard 90 %) begrenzt. Die letzten Prozent, die den festgefrorenen Panzer
-abreißen würden, entfallen. Schließen ist immer uneingeschränkt erlaubt; eine
-Hysterese braucht es nicht, weil nur einzelne Fahrten begrenzt werden und nichts
-zyklisch nachregelt.
+**alle automatischen Aufwärts-Fahrten** (außer Notfall-Öffnen) — Morgens-Öffnen,
+das Hochfahren beim Lüften, Sonnenheizen und sogar die Sturm-Öffnung — auf die
+eingestellte Maximal-Position (Standard 90 %) begrenzt. Die letzten Prozent, die den
+festgefrorenen Panzer abreißen würden, entfallen. Schließen ist immer uneingeschränkt
+erlaubt; eine Hysterese braucht es nicht, weil nur einzelne Fahrten begrenzt werden
+und nichts zyklisch nachregelt.
 
 ### Sichtfeld und Geometrie
 
@@ -227,8 +228,8 @@ einen erneuten Alarm wieder übersteuert.
 Melden alle Sensoren wieder `off`, holt die Automation einen inzwischen aktiven
 Nachtmodus nach (bei offenem oder gekipptem Fenster mit Lüftungsposition, während
 einer Pause erst zu deren Ende). Hält ein Sturm an, hat er Vorrang: Im Panzer-Modus
-wird das vom Notfall verhinderte Schließen nachgeholt, sonst bleibt der Rollladen
-oben. Die Beschattung bewertet
+wird das vom Notfall verhinderte Schließen nachgeholt — wie beim Sturmschutz auch
+während einer Pause —, sonst bleibt der Rollladen oben. Die Beschattung bewertet
 der nächste Tick frisch. Die Position vor dem Alarm wird nicht wiederhergestellt,
 weitere verpasste Ereignisse werden nicht nachgeholt.
 
@@ -324,11 +325,28 @@ template:
 zweite Instanz desselben Fensters mit eigenem Zeit-Helfer an und trägt dort denselben
 Urlaubs-Helfer mit "AUS pausiert" ein — so läuft immer genau eine der beiden.
 
-**Rauchmelder / Alarm — alle Rollos hoch?** Bewusst nicht im Blueprint: Ein Brandalarm
-ist ein Haus-Ereignis, kein Pro-Fenster-Verhalten. Eine einzige kleine Automation ist
-robuster: Trigger Rauchmelder → `cover.open_cover` auf alle Rollladen-Entitäten (plus
-Licht an, Türen entriegeln — was immer der Fluchtweg braucht). Sie übersteuert die
-Blueprint-Instanzen einfach; deren Eingriffs-Erkennung stört sich daran nicht.
+**Rauchmelder / Alarm — alle Rollos hoch?** Dafür gibt es das Notfall-Öffnen (siehe
+Abschnitt "Notfall-Öffnen" oben) — die Sensoren werden in jeder Instanz ausgewählt.
+Eine eigene Automation (Rauchmelder → `cover.open_cover` auf alle Rollläden) öffnet
+zwar auch, aber die Blueprint-Instanzen wissen nichts vom Alarm und fahren den
+Rollladen bei der nächsten Gelegenheit wieder herunter:
+
+- Wird bei aktivem Nachtmodus ein offenes oder gekipptes Fenster geschlossen — etwa
+  auf dem Weg nach draußen —, holt die Instanz die Nacht nach und schließt.
+- Schaltet sich der Nachtmodus während des Alarms ein (z. B. ein Zeitplan um 22 Uhr
+  bei einer stundenlangen Hagelwarnung), fährt der Rollladen herunter.
+- Im Panzer-Modus schließt ihn der Sturmschutz, sobald der Wind die Schwelle
+  überschreitet (bei geschlossenem Fenster).
+- Lief gerade das Lüften, stellt das Schließen des Fensters die gemerkte
+  Ausgangsposition (bzw. nachts die Nachtposition) wieder her; mit "Schließen
+  erzwingen" geht er nach Ablauf des Zeitfensters zu.
+- Lief noch keine Beschattung, beginnt der nächste Tick bei Sonne und Wärme eine und
+  fährt auf die Beschattungsposition — nur eine schon laufende Beschattung wertet
+  die Öffnung als manuellen Eingriff.
+
+Das Notfall-Öffnen hält den Rollladen dagegen oben, solange ein Sensor Alarm meldet.
+Licht an, Türen entriegeln — was immer der Fluchtweg sonst braucht — bleibt Sache
+einer eigenen, hausweiten Automation auf dieselben Sensoren.
 
 **Die Beschattung tut nichts — warum?** Prüfe in dieser Reihenfolge: Gibt es eine
 Benachrichtigung wegen fehlendem Status-Helfer? Ist eine Temperaturquelle gesetzt
