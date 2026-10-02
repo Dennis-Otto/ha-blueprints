@@ -979,14 +979,17 @@ variables:
   # night_mode_time, Ende das morgendliche Öffnen — die Morgens-Uhrzeit, mit
   # "Mit dem Sonnenaufgang öffnen" der spätere von Uhrzeit und Sonnenaufgang +
   # Verschiebung, ohne beides der Sonnenaufgang (auch bei abgeschaltetem
-  # Öffnen). Heutiger Sonnenaufgang: davor next_rising, danach der Wechsel von
-  # sun.sun auf über dem Horizont (last_changed, sekundengenau wie der
-  # Sonnen-Auslöser) — next_rising minus 24 h weicht bis zu ein paar Minuten
-  # ab und dient nur als Rückfall nach einem Neustart (abends ist next_rising
-  # der Aufgang von morgen, als Uhrzeit praktisch derselbe). Ohne Sonnendaten
-  # und ohne Morgens-Uhrzeit bleibt nur der Auslöser. Als Paar statt Ja/Nein,
-  # damit die Fenster-Interaktion nach dem Warten mit der Uhrzeit von dann neu
-  # prüfen kann (night_mode_on_now)
+  # Öffnen). Heutiger Sonnenaufgang: davor next_rising, danach der frühere von
+  # zwei Werten — dem Wechsel von sun.sun auf über dem Horizont (last_changed,
+  # sekundengenau wie der Sonnen-Auslöser) und next_rising minus 24 h (weicht
+  # um bis zu ein paar Minuten ab). Im Herbst gewinnt last_changed; im
+  # Frühjahr und nach einem Neustart (last_changed = Neustart) gilt der
+  # Schätzwert — die Nacht endet dann bis zu ein paar Minuten zu früh, nach
+  # einem Neustart im Herbst zu spät. Abends ist next_rising der Aufgang von
+  # morgen, als Uhrzeit praktisch derselbe. Ohne Sonnendaten und ohne
+  # Morgens-Uhrzeit bleibt nur der Auslöser. Als Paar statt Ja/Nein, damit die
+  # Fenster-Interaktion nach dem Warten mit der Uhrzeit von dann neu prüfen
+  # kann (night_mode_on_now)
   night_time_window: >-
     {% if night_mode_boolean is not string
           and night_mode_time is string
