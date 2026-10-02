@@ -9,15 +9,20 @@ A collection of Home Assistant automation blueprints.
 **File:** `automations/cover_automation_v2.yaml`
 
 Pro Fenster/Rollladen wird eine eigene Automation erstellt — gemeinsame Helfer
-(Uhrzeit, Nachtmodus) wählen alle Instanzen identisch aus.
+(Uhrzeit, Nachtmodus) wählen alle Instanzen identisch aus. Einziges Pflichtfeld
+ist der Rollladen; der Fenstersensor ist optional (festverglaste Fenster!).
 
-- Morgens öffnen (input_datetime-Helfer, abschaltbar)
+- Morgens öffnen: zur Uhrzeit (input_datetime-Helfer), zum Sonnenaufgang mit
+  Verschiebung ("später von beiden"), oder erst bei Bewegung im Raum
 - Fenster-Interaktion (offen/gekippt → Position, mit Rückfahr-Logik)
-- Nachtmodus inkl. Lüftungsposition bei offenem Fenster
+- Nachtmodus inkl. Lüftungsposition bei offenem Fenster und optionaler
+  Nacht-Zielposition; Helfer darf input_boolean, Schedule oder Binärsensor sein
 - Sturmschutz (Wetter-Entität oder Wind-Sensor, optionaler Panzer-Modus) — hat immer Vorrang
 - Sonnenschutz/Beschattung anhand des Sonnenstands (Fenster-Geometrie, Temperatur-Schwelle
-  mit Hysterese, optionaler Wetterlagen-Filter, erkennt manuelle Eingriffe)
+  mit Hysterese, optionaler Wetterlagen-Filter und Freigabe-Entität für PV/Lux/eigene
+  Bedingungen, erkennt manuelle Eingriffe)
 - Sonnenheizen für die Heizperiode (öffnet vergessene Rollos bei Sonne und Kälte)
+- Frostschutz (begrenzt Aufwärtsfahrten bei Frost — schützt festgefrorene Panzer)
 - Moskito-Modus (Licht aus im Raum, wenn das Fenster nach Sonnenuntergang geöffnet wird)
 - Actionable Notifications bei zu lange offenen/gekippten Fenstern
 - Abwesenheitsmodus (schließt, wenn alle weg sind — nur bei geschlossenem Fenster —,
@@ -30,6 +35,11 @@ Funktionsweise (Sichtfeld-Geometrie, manuelle Eingriffe, Prioritäten), bekannte
 Grenzen und FAQ.
 
 [![Import Blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https://github.com/TheRealSimon42/ha-blueprints/blob/main/automations/cover_automation_v2.yaml)
+
+> **Import-Hinweis:** Beim manuellen Import die URL der Blueprint-**Datei** verwenden
+> (`https://github.com/TheRealSimon42/ha-blueprints/blob/main/automations/cover_automation_v2.yaml`),
+> nicht die Repository-Adresse — sonst endet der Import in einem YAML-Fehler.
+> Am einfachsten den Button oben nutzen.
 
 > Hinweis: Die frühere Version (`cover_automation.yaml`, Zuordnung mehrerer Rollläden
 > über zwei parallele Listen) wurde entfernt. Bereits importierte Kopien laufen lokal
