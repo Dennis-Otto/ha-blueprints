@@ -846,7 +846,11 @@ blueprint:
             (bzw. geöffnet, siehe unten) ist und weder Nachtmodus, Sturm noch
             Pause aktiv sind. Ein während des
             Regens fälliges Morgens-Öffnen wird dabei nachgeholt. Wird das Fenster
-            vorher geschlossen, übernimmt die normale Fenster-Interaktion.
+            vorher geschlossen, übernimmt die normale Fenster-Interaktion; hat
+            sie keine Ausgangsposition mehr (z.B. nach dem Morgens-Öffnen), fährt
+            der Rollladen gleich beim Schließen zurück. Bei Frost bleibt er in der
+            Regenposition (festgefrorener Panzer); nur ein vorgemerktes
+            Morgens-Öffnen fährt dann bis zur Maximal-Position des Frostschutzes.
           default: true
           selector:
             boolean: {}
@@ -1120,6 +1124,9 @@ variables:
   rain_include_open: !input rain_include_open
   # Eigene Szene für den Regen-Snapshot — die Lüften-Szene (reclose_) bleibt unberührt
   rain_scene: "{{ 'scene.rain_' ~ (cover_entity | slugify) }}"
+  # Merker: Der Regen-Snapshot enthält ein vorgemerktes Morgens-Öffnen (wichtig
+  # für den Frostschutz beim Zurückfahren, siehe Regen-Ende)
+  rain_morning_scene: "{{ 'scene.rain_morning_' ~ (cover_entity | slugify) }}"
   # Fensterzustand, bei dem der Regenschutz greift: gekippt, offen nur mit
   # "Öffnen wie Kippen behandeln" oder "Auch bei ganz geöffnetem Fenster".
   # Ohne Fenstersensor gilt das Fenster als geschlossen — kein Regenschutz
@@ -1292,7 +1299,7 @@ triggers:
       minutes: !input rain_restore_delay
     id: rain_end
   # Fenster zu: Regen-Snapshot verwerfen — das Zurückfahren übernimmt die
-  # normale Fenster-Interaktion
+  # normale Fenster-Interaktion (nur ohne deren Snapshot der Regen-Snapshot)
   - trigger: state
     entity_id: !input window_sensor
     to:
@@ -1305,9 +1312,10 @@ triggers:
 
 actions:
   # Pausier-Helfer: hält die AUTOMATIK an, mit drei Ausnahmen — Sturmschutz
-  # (Hardware-Schutz geht vor), Aufräumen (Benachrichtigung bzw. Regen-Snapshot,
-  # bewegt nichts; das Zurückfahren nach dem Regen prüft die Pause selbst) und
-  # der Notification-Knopf (ein bewusster Nutzer-Befehl, wie der Wandtaster)
+  # (Hardware-Schutz geht vor), Aufräumen (Benachrichtigung bzw. Regen-Snapshot;
+  # das Zurückfahren nach dem Regen bzw. beim Fensterschließen prüft die Pause
+  # selbst) und der Notification-Knopf (ein bewusster Nutzer-Befehl, wie der
+  # Wandtaster)
   - condition: >-
       {{ trigger.id | default('') in ['storm_detected', 'window_closed', 'close_shutter_action',
                                       'rain_end', 'rain_window_closed']
@@ -1427,6 +1435,11 @@ actions:
                       - action: scene.create
                         data:
                           scene_id: "{{ 'rain_' ~ (cover_entity | slugify) }}"
+                          entities: "{{ {cover_entity: {'state': 'open', 'current_position': morning_target | int(100)}} }}"
+                      # Merker fürs Regen-Ende (wird nie aktiviert)
+                      - action: scene.create
+                        data:
+                          scene_id: "{{ 'rain_morning_' ~ (cover_entity | slugify) }}"
                           entities: "{{ {cover_entity: {'state': 'open', 'current_position': morning_target | int(100)}} }}"
                   # Auch ein vorgemerktes Öffnen macht den Lüftungs-Snapshot aus
                   # der Nacht ungültig (siehe unten)
@@ -2340,45 +2353,71 @@ actions:
             data:
               position: !input rain_position
 
-      # --- REGENSCHUTZ: REGEN VORBEI → ZURÜCKFAHREN ---
+      # --- REGENSCHUTZ: REGEN VORBEI ODER FENSTER ZU → ZURÜCKFAHREN ---
       # Läuft auch während der Pause (Gate-Ausnahme), damit der Snapshot sicher
       # verworfen wird — zurückgefahren wird dann aber nicht
       - conditions:
           - condition: trigger
-            id: rain_end
+            id:
+              - rain_end
+              - rain_window_closed
           - "{{ expand(rain_scene) | count > 0 }}"
         sequence:
-          # Zustand jetzt bewerten: Fenster noch im geschützten Zustand, kein
-          # Nachtmodus, kein Sturm, keine Pause — sonst nur den Snapshot verwerfen.
-          # Der Beschattungs-Status bleibt an (siehe rain_start). Frostschutz wie
-          # beim Zurückfahren nach dem Lüften: Die Position von vor dem Regen war
-          # bereits erreicht, ein vorgemerktes Morgens-Öffnen ist schon begrenzt
+          # Zustand jetzt bewerten: kein Nachtmodus, kein Sturm, keine Pause —
+          # sonst nur den Snapshot verwerfen. Regen-Ende: Fenster noch im
+          # geschützten Zustand (wurde es geschlossen, kümmert sich das Schließen).
+          # Fenster zu: Zurückfahren übernimmt die normale Fenster-Interaktion mit
+          # ihrem Snapshot; gibt es den nicht mehr (das Morgens-Öffnen hat ihn
+          # verworfen), fährt der Regen-Snapshot zurück — sonst ginge ein
+          # vorgemerktes Morgens-Öffnen verloren und der Rollladen bliebe den
+          # ganzen Tag in der Regenposition.
+          # Der Beschattungs-Status bleibt an (siehe rain_start)
           - if:
               - "{{ rain_restore }}"
-              - "{{ rain_window_protected }}"
+              - >-
+                {% if trigger.id == 'rain_end' %}
+                  {{ rain_window_protected }}
+                {% else %}
+                  {{ expand('scene.reclose_' ~ (cover_entity | slugify)) | count == 0 }}
+                {% endif %}
               - "{{ not (night_mode_boolean is string and is_state(night_mode_boolean, 'on')) }}"
               - "{{ not rain_storm_active }}"
               - "{{ not pause_active }}"
             then:
-              - action: scene.turn_on
+              - choose:
+                  - conditions:
+                      - "{{ not frost_active }}"
+                    sequence:
+                      - action: scene.turn_on
+                        target:
+                          entity_id: "{{ rain_scene }}"
+                  # Frost: Bei Eis- und Schneeregen um den Gefrierpunkt friert der
+                  # nasse Panzer gern fest — nicht auf die Position von vor dem Regen
+                  # zurück, der Rollladen bleibt tief in der Regenposition. Ein
+                  # vorgemerktes Morgens-Öffnen wird dagegen wie sonst bei Frost nur
+                  # begrenzt, nicht verboten (sonst bliebe es den ganzen Tag dunkel)
+                  - conditions:
+                      - "{{ expand(rain_morning_scene) | count > 0 }}"
+                      - >-
+                        {{ state_attr(cover_entity, 'current_position') | int(101)
+                           < [morning_position | int(100), frost_max_position | int(100)] | min }}
+                    sequence:
+                      - action: cover.set_cover_position
+                        target:
+                          entity_id: !input cover
+                        data:
+                          position: "{{ [morning_position | int(100), frost_max_position | int(100)] | min }}"
+          # Snapshot und Merker in jedem Fall verwerfen, sonst würde der nächste
+          # Regen den Snapshot nicht neu anlegen (continue_on_error: paralleler
+          # Lauf hat ihn evtl. schon gelöscht)
+          - action: scene.delete
+            target:
+              entity_id: "{{ rain_scene }}"
+            continue_on_error: true
+          - if:
+              - "{{ expand(rain_morning_scene) | count > 0 }}"
+            then:
+              - action: scene.delete
                 target:
-                  entity_id: "{{ rain_scene }}"
-          # Der Regen ist vorbei: Snapshot in jedem Fall verwerfen, sonst würde der
-          # nächste Regen ihn nicht neu anlegen (continue_on_error: paralleler Lauf
-          # hat ihn evtl. schon gelöscht)
-          - action: scene.delete
-            target:
-              entity_id: "{{ rain_scene }}"
-            continue_on_error: true
-
-      # --- REGENSCHUTZ: FENSTER ZU → REGEN-SNAPSHOT VERWERFEN ---
-      # Das Zurückfahren übernimmt die normale Fenster-Interaktion
-      - conditions:
-          - condition: trigger
-            id: rain_window_closed
-          - "{{ expand(rain_scene) | count > 0 }}"
-        sequence:
-          - action: scene.delete
-            target:
-              entity_id: "{{ rain_scene }}"
-            continue_on_error: true
+                  entity_id: "{{ rain_morning_scene }}"
+                continue_on_error: true

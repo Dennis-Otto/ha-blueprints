@@ -55,19 +55,19 @@ Fenster, bis der Helfer gesetzt oder das Feature deaktiviert ist.
 
 ## Die Features im Überblick
 
-| Feature                 | Was es tut                                                                                                                                                               | Voraussetzung                                                        |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
-| Morgens öffnen          | Fährt zur eingestellten Uhrzeit und/oder zum Sonnenaufgang auf die Zielposition (nur wenn geschlossener); optional erst bei der ersten Bewegung im Raum                  | `input_datetime`-Helfer (nur Uhrzeit) und/oder Sonnenaufgangs-Option |
-| Fenster-Interaktion     | Kippen → Lüftungsposition, Öffnen → ganz auf (optional: wie Kippen behandeln); nach dem Schließen zurück in die Ausgangsposition                                         | Fenstersensor                                                        |
-| Regenschutz beim Lüften | Fährt bei Regen und gekipptem Fenster auf eine Schutzposition (nur abwärts) und nach dem Regen zurück                                                                    | Regensensor (`binary_sensor` oder `input_boolean`), Fenstersensor    |
-| Nachtmodus              | Schließt beim Einschalten des Helfers (wahlweise auf eine Nacht-Zielposition statt ganz zu); offene/gekippte Fenster bekommen eine Lüftungsposition                      | `input_boolean`, Zeitplan oder Binärsensor                           |
-| Sturmschutz             | Fährt bei Starkwind hoch (oder im Panzer-Modus herunter)                                                                                                                 | Wetter-Entität oder Wind-Sensor                                      |
-| Sonnenschutz            | Beschattet anhand des Sonnenstands so, dass die Sonne höchstens X m in den Raum fällt; öffnet nach Ende wieder; optional an eine Freigabe-Entität (PV, Lux, …) gekoppelt | Status-Helfer, Geometrie, Temperaturquelle                           |
-| Sonnenheizen            | Öffnet im Winter vergessene Rollos, wenn Sonne ins Fenster scheint und es kalt ist                                                                                       | eigener Status-Helfer, Geometrie                                     |
-| Frostschutz             | Begrenzt bei Frost alle automatischen Aufwärts-Fahrten auf eine schonende Maximal-Position (festgefrorener Panzer)                                                       | Außentemperatur-Sensor                                               |
-| Moskito-Modus           | Schaltet beim Fensteröffnen nach Sonnenuntergang die Lichter im Raum aus (mit Ausnahmen)                                                                                 | Fenstersensor                                                        |
-| Benachrichtigungen      | Meldet zu lange offene/gekippte Fenster aufs Handy, mit "Rollladen schließen"-Button; verschwindet automatisch beim Schließen                                            | Companion-App-Geräte, Fenstersensor                                  |
-| Pausieren               | Hält die komplette Automation an, solange ein Helfer eingeschaltet ist — z.B. während Videoaufnahmen oder wenn Gäste schlafen                                            | `input_boolean`-Helfer (optional)                                    |
+| Feature             | Was es tut                                                                                                                                                               | Voraussetzung                                                        |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| Morgens öffnen      | Fährt zur eingestellten Uhrzeit und/oder zum Sonnenaufgang auf die Zielposition (nur wenn geschlossener); optional erst bei der ersten Bewegung im Raum                  | `input_datetime`-Helfer (nur Uhrzeit) und/oder Sonnenaufgangs-Option |
+| Fenster-Interaktion | Kippen → Lüftungsposition, Öffnen → ganz auf (optional: wie Kippen behandeln); nach dem Schließen zurück in die Ausgangsposition                                         | Fenstersensor                                                        |
+| Regenschutz         | Fährt bei Regen und gekipptem Fenster auf eine Schutzposition (nur abwärts) und nach dem Regen zurück                                                                    | Regensensor (`binary_sensor` oder `input_boolean`), Fenstersensor    |
+| Nachtmodus          | Schließt beim Einschalten des Helfers (wahlweise auf eine Nacht-Zielposition statt ganz zu); offene/gekippte Fenster bekommen eine Lüftungsposition                      | `input_boolean`, Zeitplan oder Binärsensor                           |
+| Sturmschutz         | Fährt bei Starkwind hoch (oder im Panzer-Modus herunter)                                                                                                                 | Wetter-Entität oder Wind-Sensor                                      |
+| Sonnenschutz        | Beschattet anhand des Sonnenstands so, dass die Sonne höchstens X m in den Raum fällt; öffnet nach Ende wieder; optional an eine Freigabe-Entität (PV, Lux, …) gekoppelt | Status-Helfer, Geometrie, Temperaturquelle                           |
+| Sonnenheizen        | Öffnet im Winter vergessene Rollos, wenn Sonne ins Fenster scheint und es kalt ist                                                                                       | eigener Status-Helfer, Geometrie                                     |
+| Frostschutz         | Begrenzt bei Frost alle automatischen Aufwärts-Fahrten auf eine schonende Maximal-Position (festgefrorener Panzer)                                                       | Außentemperatur-Sensor                                               |
+| Moskito-Modus       | Schaltet beim Fensteröffnen nach Sonnenuntergang die Lichter im Raum aus (mit Ausnahmen)                                                                                 | Fenstersensor                                                        |
+| Benachrichtigungen  | Meldet zu lange offene/gekippte Fenster aufs Handy, mit "Rollladen schließen"-Button; verschwindet automatisch beim Schließen                                            | Companion-App-Geräte, Fenstersensor                                  |
+| Pausieren           | Hält die komplette Automation an, solange ein Helfer eingeschaltet ist — z.B. während Videoaufnahmen oder wenn Gäste schlafen                                            | `input_boolean`-Helfer (optional)                                    |
 
 **Prioritäten:** Der **Sturmschutz gewinnt immer** — bei Starkwind bewegen weder
 Morgens-Öffnen noch Beschattung, Sonnenheizen oder das Zurückfahren den Rollladen,
@@ -213,7 +213,10 @@ Feature aus.
   innerhalb der Trocken-Dauer überschreiben die gemerkte Position nicht.
 - **Fenster wird vorher geschlossen:** Die gemerkte Position wird verworfen, das
   Zurückfahren übernimmt die normale Fenster-Interaktion (innerhalb ihres
-  Zeitfensters, siehe Bekannte Grenzen).
+  Zeitfensters, siehe Bekannte Grenzen). Hat sie keine Ausgangsposition mehr — weil
+  das Morgens-Öffnen sie während des Regens verworfen hat —, fährt der Rollladen
+  stattdessen gleich beim Schließen auf die gemerkte Position, z. B. die vorgemerkte
+  Morgen-Position.
 
 Standardmäßig gilt das nur für gekippte Fenster (bzw. offene mit "Öffnen wie Kippen
 behandeln"). Mit "Auch bei ganz geöffnetem Fenster" greift der Regenschutz auch bei
@@ -232,9 +235,10 @@ Zurückfahren gilt eine große Abweichung zur Regenposition wie ein manueller Ei
 — der Rollladen bleibt dann bis zum Ende der Beschattung tiefer. Der Sturmschutz hat
 Vorrang: Bei Starkwind fährt der Regenschutz nicht herunter (außer im Panzer-Modus, dort ist Herunterfahren
 ohnehin die Schutzrichtung). Regnet es beim Ende einer Pause, wird der Regenschutz
-nachgeholt. Der Frostschutz begrenzt ein vorgemerktes Morgens-Öffnen wie gewohnt;
-das Zurückfahren auf die Position von vor dem Regen begrenzt er dagegen nicht — die
-war ja bereits erreicht (wie beim Zurückfahren nach dem Lüften).
+nachgeholt. Bei Frost fährt der Rollladen nach dem Regen nicht zurück, sondern bleibt
+tief in der Regenposition — bei Eis- und Schneeregen um den Gefrierpunkt friert der
+nasse Panzer gern fest. Nur ein vorgemerktes Morgens-Öffnen wird nachgeholt, wie sonst
+bei Frost begrenzt auf die Maximal-Position des Frostschutzes.
 
 **Kein Regensensor, aber eine Wetter-Entität?** Ein Template-Binärsensor
 (_Einstellungen → Geräte & Dienste → Helfer → Helfer erstellen → Template →
@@ -275,10 +279,11 @@ die Einmal-Logik des Sonnenheizens und die Eingriffs-Erkennung auf.
   dynamischen Szene gemerkt und überlebt keinen Home-Assistant-Neustart. Nach einem
   Neustart während des Regens bleibt der Rollladen nach dem Regen in der
   Regenposition.
-- **Fenster während des Regens geschlossen:** Die gemerkte Position wird verworfen.
-  Liegt das Kippen schon länger zurück als das Zeitfenster fürs Zurückfahren, bleibt
-  der Rollladen in der Regenposition, bis das nächste reguläre Ereignis ihn
-  übernimmt. Dasselbe gilt, wenn der Regen nachts oder während Sturm/Pause endet.
+- **Fenster während des Regens geschlossen:** Die gemerkte Position wird verworfen,
+  solange die Fenster-Interaktion noch eine eigene Ausgangsposition hat. Liegt das
+  Kippen dann schon länger zurück als das Zeitfenster fürs Zurückfahren, bleibt der
+  Rollladen in der Regenposition, bis das nächste reguläre Ereignis ihn übernimmt.
+  Dasselbe gilt, wenn der Regen nachts, bei Frost oder während Sturm/Pause endet.
 - **Morgens-Öffnen bei Regen** wird nur nachgeholt, wenn "Nach dem Regen
   zurückfahren" aktiv ist; sonst entfällt es, solange der Regenschutz greift.
 - **Regensensor-Typen:** Ausgewertet wird nur an/aus eines `binary_sensor` oder
