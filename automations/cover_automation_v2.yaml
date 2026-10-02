@@ -526,7 +526,10 @@ blueprint:
             Wetterlage, Freigabe-Entität "off") so viele Minuten ununterbrochen
             besteht — eine kurze Wolke öffnet den Rollladen dann nicht gleich
             wieder. Mit gesetztem Wert ersetzt sie die feste 10-Minuten-Trägheit
-            des Wetterlagen-Filters und der Freigabe-Entität.
+            des Wetterlagen-Filters und der Freigabe-Entität — Werte unter 10
+            Minuten beenden bei ausgeschalteter Freigabe bzw. nicht erlaubter
+            Wetterlage also schneller als ganz ohne Verzögerung; empfohlen sind
+            10 Minuten oder mehr.
             Nach einem Neustart von Home Assistant beginnt die Wartezeit von vorn.
             0 = keine Verzögerung (bisheriges Verhalten: Ende beim nächsten
             5-Minuten-Takt).

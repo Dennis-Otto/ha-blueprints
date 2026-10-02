@@ -166,6 +166,8 @@ Ein `delay_off` im Sensor glättet zusätzlich; die 10-Minuten-Trägheit im Blue
 verhindert in jedem Fall, dass eine flatternde Quelle den Rollladen im
 5-Minuten-Takt fahren lässt. Bei "unavailable" startet keine neue Beschattung, eine
 laufende bleibt bestehen.
+Mit gesetzter Ausschaltverzögerung gilt statt der 10 Minuten deren Wartezeit (siehe
+"Ein- und Ausschaltverzögerung" unten).
 
 ### Manuelle Eingriffe während der Beschattung
 
@@ -223,7 +225,9 @@ Gut zu wissen:
 - Ist die Temperaturquelle kurz nicht verfügbar, zählt das weder als Start- noch als
   Ende-Grund; eine laufende Wartezeit beginnt danach von vorn.
 - Mit gesetzter Ausschaltverzögerung ersetzt diese die feste 10-Minuten-Trägheit des
-  Wetterlagen-Filters und der Freigabe-Entität.
+  Wetterlagen-Filters und der Freigabe-Entität. Werte unter 10 Minuten beenden bei
+  ausgeschalteter Freigabe bzw. nicht erlaubter Wetterlage also schneller als ganz
+  ohne Verzögerung — empfohlen sind 10 Minuten oder mehr.
 - Nach einem Neustart beginnen die Wartezeiten von vorn (siehe Bekannte Grenzen).
 
 ### Warum die Status-Helfer nötig sind
