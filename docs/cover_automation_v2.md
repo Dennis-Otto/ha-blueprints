@@ -274,7 +274,12 @@ Beschattung und Sonnenheizen brauchen kein Nachholen: Ihre 5-Minuten-Durchläufe
   2 Stunden nach dem Morgens-Zeitpunkt öffnet ein Neustart auch einen Rollladen, den
   jemand nach dem Morgens-Öffnen wieder geschlossen hat oder dessen Morgens-Öffnen in
   eine Pause fiel. Bei aktivem Nachtmodus fährt ein nachts von Hand geöffneter
-  Rollladen bei geschlossenem Fenster wieder zu.
+  Rollladen bei geschlossenem Fenster wieder zu. Das ist bewusst so: Ohne den Schalter
+  wertet die Automation einen Neustart gerade nicht als Einschalten des Nachtmodus —
+  dessen Trigger reagiert nur auf "aus" → "an", damit ein Sensor, der beim Start von
+  "unbekannt" auf "an" springt, nicht nachts alle Rollläden zufährt. Wer das Nachholen
+  einschaltet, entscheidet sich ausdrücklich dafür, den Nachtzustand nach einem
+  Neustart wiederherzustellen.
 - **Veralteter Fensterkontakt nach Neustart:** Manche Integrationen stellen nach dem
   Start den letzten bekannten Zustand wieder her, und batteriebetriebene Kontakte
   melden sich erst bei der nächsten Änderung. Wurde die Balkontür während des
@@ -372,11 +377,12 @@ speichert den Zustand genau eines Fensters. Ein geteilter Helfer führt zu falsc
 Normalfall. Die Temperatur-Schwellen trennen sie (Standard: beschatten über 25 °C,
 heizen unter 12 °C); die Schwellen sollten sich nicht überlappen.
 
-**Home Assistant hat genau zur Morgens-Uhrzeit neu gestartet — warum blieb der
-Rollladen zu?** Ein verpasster Zeitpunkt wird standardmäßig nicht nachgeholt. Mit dem
-Schalter "Nach Neustart nachholen" (Abschnitt "Nach HA-Neustart") öffnet die
-Automation nach dem Start nachträglich, sofern der Neustart höchstens 2 Stunden nach
-der Morgens-Uhrzeit liegt — Details unter
+**Home Assistant hat genau zum Morgens-Zeitpunkt (Uhrzeit bzw. Sonnenaufgang) neu
+gestartet — warum blieb der Rollladen zu?** Ein verpasster Zeitpunkt wird
+standardmäßig nicht nachgeholt. Mit dem Schalter "Nach Neustart nachholen" (Abschnitt
+"Nach HA-Neustart") öffnet die Automation nach dem Start nachträglich, sofern der
+Neustart höchstens 2 Stunden nach dem Morgens-Zeitpunkt liegt — bei aktivem
+Nachtmodus wird wie beim regulären Morgens-Öffnen nicht geöffnet. Details unter
 [Nach einem Neustart von Home Assistant](#nach-einem-neustart-von-home-assistant).
 
 **Die Fenster-offen-Meldung bleibt auf dem Handy stehen?** Sie verschwindet

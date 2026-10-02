@@ -910,8 +910,10 @@ blueprint:
             dabei nur hochgefahren, nie abgesenkt. Sturmschutz und Pause haben
             Vorrang; Beschattung und Sonnenheizen übernehmen ihre nächsten
             Durchläufe ohnehin selbst. Ein nachts von Hand geöffneter Rollladen
-            fährt bei geschlossenem Fenster wieder zu. ⚠️ Aussperr-Gefahr, falls
-            der Fensterkontakt nach dem Neustart einen veralteten Zustand meldet
+            fährt bei geschlossenem Fenster wieder zu — bewusst: Ohne diese
+            Option wertet die Automation einen Neustart gerade nicht als
+            Einschalten des Nachtmodus. ⚠️ Aussperr-Gefahr, falls der
+            Fensterkontakt nach dem Neustart einen veralteten Zustand meldet
             (Balkontür inzwischen offen, Kontakt meldet noch "zu"). Aus =
             bisheriges Verhalten (nach einem Neustart wird nichts nachgeholt).
           default: false
