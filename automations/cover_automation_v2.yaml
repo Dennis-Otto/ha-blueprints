@@ -747,11 +747,12 @@ blueprint:
             Der Rollladen fährt nach dem Einschalten des Nachtmodus zufällig
             zwischen 0 und dieser Anzahl Minuten später herunter — nur später, nie
             früher. Wirkt bei Abwesenheit bewohnt (Anwesenheitssimulation), und
-            mehrere Rollläden fahren nicht exakt gleichzeitig. Ist der Nachtmodus
-            nach der Wartezeit wieder aus oder die Automatik pausiert, entfällt
-            die Fahrt — ebenso bei Sturm (außer im Panzer-Modus). 0 = sofort
-            (bisheriges Verhalten). Hinweis: Startet Home Assistant während der
-            Wartezeit neu, entfällt die Fahrt.
+            mehrere Rollläden fahren nicht exakt gleichzeitig. Wird der
+            Nachtmodus in der Wartezeit ausgeschaltet oder ist die Automatik
+            danach pausiert, entfällt die Fahrt — ebenso bei Sturm (außer im
+            Panzer-Modus). Ein kurzes "nicht verfügbar" des Nachtmodus zählt
+            nicht als Ausschalten. 0 = sofort (bisheriges Verhalten). Hinweis:
+            Startet Home Assistant während der Wartezeit neu, entfällt die Fahrt.
           default: 0
           selector:
             number:
@@ -1376,12 +1377,25 @@ actions:
           - if:
               - "{{ night_random_delay | int(0) > 0 }}"
             then:
-              - delay:
-                  seconds: "{{ range(0, (night_random_delay | int(0)) * 60 + 1) | random }}"
-              # Zustand nach dem Warten neu bewerten: Nachtmodus inzwischen wieder
-              # aus oder Pause aktiv (das Gate oben ist veraltet) → gar nichts tun,
-              # auch die Status-Helfer bleiben dann unangetastet. Wurde der Helfer
-              # zwischendurch aus- und wieder eingeschaltet, übernimmt der neuere Lauf
+              - variables:
+                  night_wait_seconds: "{{ range(0, (night_random_delay | int(0)) * 60 + 1) | random }}"
+              # Warten, aber auf ein echtes Ausschalten lauschen: Wird der Nachtmodus
+              # in der Wartezeit ausgeschaltet, entfällt die Fahrt (ein erneutes
+              # Einschalten ab "off" startet ohnehin einen neuen Lauf). Ein Wackler
+              # über unavailable (Template-Sensor, Reload) bricht dagegen nicht ab —
+              # night_close feuert nur ab "off", danach käme kein neuer Lauf mehr
+              - wait_for_trigger:
+                  - trigger: state
+                    entity_id: !input night_mode_boolean
+                    to: "off"
+                timeout:
+                  seconds: "{{ night_wait_seconds }}"
+                continue_on_timeout: true
+              # Zustand nach dem Warten neu bewerten: Nachtmodus ausgeschaltet oder
+              # Pause aktiv (das Gate oben ist veraltet) → gar nichts tun, auch die
+              # Status-Helfer bleiben dann unangetastet. unavailable/unknown am Ende
+              # gilt als "noch Nacht": Eingeschaltet war er, ein Ausschalten kam
+              # nicht — ein Sensor-Aussetzer soll die Nacht nicht offen lassen
               - variables:
                   pause_now: >-
                     {% set helpers = [pause_boolean] if pause_boolean is string else pause_boolean %}
@@ -1392,12 +1406,11 @@ actions:
                        and found | rejectattr('state', 'eq', pausing) | list | length == 0 }}
                   night_still_on: >-
                     {{ night_mode_boolean is string
-                       and is_state(night_mode_boolean, 'on')
-                       and states[night_mode_boolean].last_changed == trigger.to_state.last_changed }}
+                       and not is_state(night_mode_boolean, 'off') }}
               - if:
-                  - "{{ pause_now or not night_still_on }}"
+                  - "{{ wait.trigger is not none or pause_now or not night_still_on }}"
                 then:
-                  - stop: "Nach der Zufallsverzögerung pausiert oder Nachtmodus nicht mehr (durchgehend) an"
+                  - stop: "Während der Zufallsverzögerung Nachtmodus ausgeschaltet oder danach pausiert"
           # Beschattungs-Status zurücksetzen: Die Nacht beendet die Beschattung,
           # sonst springt der Rollladen morgens beim ersten Tick auf die End-Position.
           # Bewusst erst nach der Zufallsverzögerung: Bis dahin ist die Beschattung

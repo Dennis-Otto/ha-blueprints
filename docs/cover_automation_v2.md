@@ -210,8 +210,12 @@ Nach der Wartezeit bewertet die Automation die Lage neu, statt blind zu fahren:
   Nachtmodus holt das Pause-Ende wie gewohnt nach.
 - **Nachtmodus am Morgen (wieder) an:** Das Öffnen entfällt — der Nachtmodus hat wie
   beim regulären Morgens-Öffnen Vorrang.
-- **Nachtmodus wieder aus:** Die Nachtfahrt entfällt. Wurde der Helfer zwischendurch
-  aus- und wieder eingeschaltet, fährt nur der neuere Lauf. Den Status-Helfer des
+- **Nachtmodus wieder aus:** Wird der Nachtmodus während der Wartezeit
+  ausgeschaltet, entfällt die Nachtfahrt. Wurde der Helfer zwischendurch aus- und
+  wieder eingeschaltet, fährt nur der neuere Lauf. Ein kurzes "nicht verfügbar" eines
+  Sensors als Nachtmodus (z. B. beim Neuladen eines Template-Sensors) zählt nicht als
+  Ausschalten — auch nicht, wenn es genau am Ende der Wartezeit ansteht: Die Nacht
+  wurde eingeschaltet und nicht beendet, also wird geschlossen. Den Status-Helfer des
   Sonnenschutzes setzt der Nachtmodus erst nach der Wartezeit zurück — beschattet
   wird währenddessen trotzdem nicht mehr (der Nachtmodus ist ja schon an), und
   entfällt die Fahrt, endet eine laufende Beschattung regulär, statt in
@@ -229,19 +233,15 @@ Nach der Wartezeit bewertet die Automation die Lage neu, statt blind zu fahren:
   ein offenes oder gekipptes Fenster geschlossen, fährt der Rollladen sofort zu, ohne
   die Wartezeit abzuwarten.
 
-**Urlaub mit eigenen Zeiten:** Für einen echten Urlaubsmodus — z. B. später öffnen
-und früher schließen — legst du für denselben Rollladen eine zweite Instanz an und
-schaltest beide über einen gemeinsamen "Urlaub"-Helfer im Abschnitt "Pausieren"
-gegeneinander: in der Alltags-Instanz "AN pausiert", in der Urlaubs-Instanz
-"AUS pausiert". So ist genau eine der beiden aktiv — vorausgesetzt, der
-Urlaub-Helfer ist in beiden der einzige Pausier-Helfer (bei mehreren pausiert eine
-Instanz nur, wenn alle im Pausier-Zustand sind) und verfügbar (ein fehlender Helfer
-pausiert nie, dann laufen beide). In der Urlaubs-Instanz
-eigene Helfer (Uhrzeit, ggf. Nachtmodus) wählen und die Zufallsverzögerung setzen;
-Sonnenschutz und Sonnenheizen dort entweder aus lassen oder mit eigenen
-Status-Helfern betreiben. Den Sturmschutz in beiden gleich einstellen — er greift
-auch in der pausierten Instanz. Den Urlaub-Helfer schaltest du selbst oder per
-Automation (z. B. wenn morgens niemand zu Hause ist).
+**Urlaub mit eigenen Zeiten:** Das Grundrezept — eine zweite Instanz für denselben
+Rollladen, über einen gemeinsamen Urlaubs-Helfer gegeneinander geschaltet — steht in
+der FAQ unter "Urlaubsmodus / Anwesenheitssimulation?". Dabei beachten: Der
+Urlaubs-Helfer muss in beiden Instanzen der einzige Pausier-Helfer sein (bei mehreren
+pausiert eine Instanz nur, wenn alle im Pausier-Zustand sind) und verfügbar (ein
+fehlender Helfer pausiert nie, dann laufen beide). In der Urlaubs-Instanz die
+Zufallsverzögerung setzen; Sonnenschutz und Sonnenheizen dort entweder aus lassen oder
+mit eigenen Status-Helfern betreiben. Den Sturmschutz in beiden gleich einstellen — er
+greift auch in der pausierten Instanz.
 
 ### Warum die Status-Helfer nötig sind
 
@@ -376,8 +376,9 @@ pausieren. Typischer Fall: das Badfenster mit einfachem binärem Kontakt.
 
 **Alle Rollläden fahren auf die Minute gleichzeitig — geht das unauffälliger?** Ja:
 Mit dem Regler "Zufällige Verzögerung (max.)" bei "Morgens öffnen" und im Nachtmodus
-fährt jeder Rollladen zufällig bis zu X Minuten später. Details und ein Rezept für
-den Urlaub stehen oben unter "Zufallsversatz und Anwesenheitssimulation".
+fährt jeder Rollladen zufällig bis zu X Minuten später. Details stehen oben unter
+"Zufallsversatz und Anwesenheitssimulation", das Rezept für den Urlaub unter
+"Urlaubsmodus / Anwesenheitssimulation?".
 
 **Kann ich die Automation zeitweise anhalten?** Ja — im Abschnitt "Pausieren" einen
 oder mehrere `input_boolean`-Helfer auswählen. Die Logik ist wählbar: "AN
