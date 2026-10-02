@@ -1607,12 +1607,13 @@ actions:
                 {{ shading_enable_entity is string
                    and states(shading_enable_entity) == 'off'
                    and (as_timestamp(now()) - as_timestamp(states[shading_enable_entity].last_changed)) > 600 }}
-              # Frostschutz: Mit Blendschutz wird auch bei Frost beschattet — dann
-              # fahren Nachführen und Beschattungs-Ende nie über die schonende
-              # Maximal-Position nach oben. Steht der Rollladen schon höher, wird er
-              # deswegen nicht heruntergefahren (wie beim Lüften), nur nicht weiter hoch
+              # Frostschutz: Erst der Blendschutz macht Beschattung bei Frost möglich —
+              # mit ihm fahren Nachführen und Beschattungs-Ende bei Frost nie über die
+              # schonende Maximal-Position nach oben. Steht der Rollladen schon höher,
+              # wird er deswegen nicht heruntergefahren (wie beim Lüften), nur nicht
+              # weiter hoch. Ohne Blendschutz bleibt alles wie bisher (100 = keine Grenze)
               frost_cap: >-
-                {% if frost_active %}
+                {% if frost_active and glare_enabled %}
                   {{ [frost_max_position | int(100), state_attr(cover_entity, 'current_position') | int(0)] | max }}
                 {% else %}
                   100
