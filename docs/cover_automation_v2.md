@@ -74,7 +74,7 @@ und auch der Pausier-Helfer hält ihn nicht auf (Schutz der Hardware geht vor).
 Danach kommt die Pause (solange ihr Helfer an ist, passiert sonst gar nichts),
 dann der Nachtmodus (nachts wird nicht beschattet, nicht geheizt und beim
 Fensteröffnen nur bis zur Lüftungsposition geöffnet), dann der Frostschutz als
-Begrenzer aller Öffnungs-Fahrten, dann erst die Komfort-Features.
+Begrenzer der Öffnungs-Fahrten (außer bei Sturm), dann erst die Komfort-Features.
 
 ## Verhalten verstehen
 
