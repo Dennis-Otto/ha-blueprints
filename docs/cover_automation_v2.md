@@ -256,7 +256,8 @@ Entwarnung. Ist ein Wind-Sensor gesetzt, entscheidet nur er über die Entwarnung
   Rollladen wirklich bewegt hat — sie folgt jedem Wert über dem Grenzwert, auch einer
   einzelnen Böe, die wegen der Auslöseverzögerung gar keinen Sturmschutz ausgelöst hat.
   Nachts stellt sie dann den Nachtzustand her, im Panzer-Modus öffnet sie tagsüber
-  jeden noch geschlossenen Rollladen, auch einen, der schon vor dem Sturm zu war.
+  jeden noch geschlossenen Rollladen, auch einen, der schon vor dem Sturm zu war —
+  mit "Morgens nur bei Bewegung öffnen" nur, wenn der Sensor gerade Bewegung meldet.
 - **Entwarnung mit zwei Windquellen:** Sind Wind-Sensor und Wetter-Entität gesetzt,
   kann der Sturmschutz über beide auslösen, die Entwarnung kommt aber nur vom
   Wind-Sensor. Hat allein die Wetter-Entität den Sturm gemeldet, gibt es keine
