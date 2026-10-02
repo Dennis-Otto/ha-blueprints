@@ -825,9 +825,8 @@ blueprint:
         Führungsschiene fest — fährt der Motor dann auf Anschlag, können Gurt
         oder Lamellen reißen. Der Frostschutz begrenzt deshalb alle
         automatischen AUFWÄRTS-Fahrten (morgens, Lüften, Sonnenheizen, Sturm)
-        auf eine schonende Maximal-Position, solange es friert (außer
-        Notfall-Öffnen). Schließen ist immer erlaubt. Aktiv, sobald ein
-        Temperatursensor ausgewählt ist.
+        auf eine schonende Maximal-Position, solange es friert (außer Notfall-Öffnen). Schließen ist
+        immer erlaubt. Aktiv, sobald ein Temperatursensor ausgewählt ist.
       icon: mdi:snowflake-thermometer
       collapsed: true
       input:
@@ -860,10 +859,9 @@ blueprint:
         frost_max_position:
           name: Maximale Öffnungsposition bei Frost
           description: >
-            Höher als bis zu dieser Position fährt keine automatische Fahrt
-            (außer Notfall-Öffnen), solange es friert — die letzten Prozent
-            reißen den festgefrorenen Panzer sonst vom Fensterbrett bzw. ziehen
-            ihn gegen den Anschlag.
+            Höher als bis zu dieser Position fährt keine automatische Fahrt (außer Notfall-Öffnen),
+            solange es friert — die letzten Prozent reißen den festgefrorenen
+            Panzer sonst vom Fensterbrett bzw. ziehen ihn gegen den Anschlag.
           default: 90
           selector:
             number:

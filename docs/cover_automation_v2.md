@@ -78,8 +78,7 @@ Pausier-Helfer hält ihn nicht auf (Schutz der Hardware geht vor).
 Danach kommt die Pause (solange ihr Helfer an ist, passiert sonst gar nichts),
 dann der Nachtmodus (nachts wird nicht beschattet, nicht geheizt und beim
 Fensteröffnen nur bis zur Lüftungsposition geöffnet), dann der Frostschutz als
-Begrenzer aller Öffnungs-Fahrten (außer Notfall-Öffnen), dann erst die
-Komfort-Features.
+Begrenzer aller Öffnungs-Fahrten (außer Notfall-Öffnen), dann erst die Komfort-Features.
 
 ## Verhalten verstehen
 
@@ -113,12 +112,12 @@ Bei Minusgraden frieren Rollladenpanzer gern am Fensterbrett oder in den
 Führungsschienen fest; fährt der Motor dann auf Anschlag, reißen Gurt oder Lamellen.
 Sobald ein Außentemperatur-Sensor im Frostschutz-Abschnitt gesetzt ist (es darf
 derselbe sein wie beim Sonnenschutz), werden bei Temperaturen auf/unter der Schwelle
-**alle automatischen Aufwärts-Fahrten** (außer Notfall-Öffnen) — Morgens-Öffnen,
-das Hochfahren beim Lüften, Sonnenheizen und sogar die Sturm-Öffnung — auf die
-eingestellte Maximal-Position (Standard 90 %) begrenzt. Die letzten Prozent, die den
-festgefrorenen Panzer abreißen würden, entfallen. Schließen ist immer uneingeschränkt
-erlaubt; eine Hysterese braucht es nicht, weil nur einzelne Fahrten begrenzt werden
-und nichts zyklisch nachregelt.
+**alle automatischen Aufwärts-Fahrten** (außer Notfall-Öffnen) — Morgens-Öffnen, das Hochfahren beim Lüften,
+Sonnenheizen und sogar die Sturm-Öffnung — auf die eingestellte Maximal-Position
+(Standard 90 %) begrenzt. Die letzten Prozent, die den festgefrorenen Panzer
+abreißen würden, entfallen. Schließen ist immer uneingeschränkt erlaubt; eine
+Hysterese braucht es nicht, weil nur einzelne Fahrten begrenzt werden und nichts
+zyklisch nachregelt.
 
 ### Sichtfeld und Geometrie
 
