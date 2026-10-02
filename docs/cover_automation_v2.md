@@ -236,19 +236,20 @@ Pause.
 `unknown` (leere Batterie, Funkproblem, gelöschte Entität), gilt das als Hindernis.
 "Unbekannt" ist bei einer Fliegengittertür kein Beweis für "zu", und ein ausgehakter
 Panzer ist teurer als ein Rollladen, der eine Nacht oben bleibt. Meldet der Sensor
-danach wieder "aus" (Neustart, Funk-Aussetzer), holt die Freigabe nur einen
-Nachtmodus nach, der erst während des Ausfalls eingeschaltet wurde (mindestens 5
-Minuten nach dessen Beginn) — sonst nichts. So fährt ein nachts von Hand geöffneter
+danach wieder "aus" (Neustart, Funk-Aussetzer), holt die Freigabe nur das
+Panzer-Schließen bei Sturm nach und einen Nachtmodus, der erst während des Ausfalls
+eingeschaltet wurde (mindestens 5 Minuten nach dessen Beginn); der
+Beschattungs-Status bleibt unverändert. So fährt ein nachts von Hand geöffneter
 Rollladen nach einem Aussetzer nicht zu, und ein manueller Eingriff während der
 Beschattung bleibt gültig.
 
-**Sperre oder Fenstergruppe?** Die FAQ "Mehrere Kontakte an einem Rollladen?" unten
-beschreibt, wie man Fensterflügel und Fliegengittertür zu einer Fenstergruppe
-zusammenfasst.
-Dann zählt die offene Fliegengittertür als offenes Fenster: Der Rollladen fährt zum
-Lüften hoch, nachts auf die Lüftungsposition, und es kommen Fenster-Meldungen. Soll
-die Tür dagegen nur das Herunterfahren verhindern, ohne die Fenster-Logik
-auszulösen, gehört sie in die Sperr-Sensoren.
+**Sperre oder Fenstergruppe?** Die FAQ "Mehrere Kontakte an einem Rollladen
+(Doppelflügel, Fliegengittertür)?" unten beschreibt, wie man Fensterflügel und
+Fliegengittertür zu einer Fenstergruppe zusammenfasst. Dann zählt die offene
+Fliegengittertür als offenes Fenster: Der Rollladen fährt zum Lüften hoch, nachts auf
+die Lüftungsposition, und es kommen Fenster-Meldungen. Soll die Tür dagegen nur das
+Herunterfahren verhindern, ohne die Fenster-Logik auszulösen, gehört sie in die
+Sperr-Sensoren.
 
 ## Bekannte Grenzen
 
@@ -275,14 +276,20 @@ auszulösen, gehört sie in die Sperr-Sensoren.
   während der Sperre. Die Sperre verhindert nur den _Start_ einer Abwärtsfahrt — wird
   die Fliegengittertür während einer laufenden Fahrt geöffnet, stoppt sie nicht.
 - **Nach der Sperre** werden nur Nachtmodus und Panzer-Schließen bei Sturm nachgeholt
-  (nach einem bloßen Sensor-Ausfall nur, wenn währenddessen der Nachtmodus begann,
+  (nach einem bloßen Sensor-Ausfall der Nachtmodus nur, wenn er währenddessen begann,
   siehe oben).
   Ausgelassene Einzelfahrten (Zurückfahren nach dem Lüften, "Schließen erzwingen",
   Knopf-Druck) entfallen — tagsüber bleibt der Rollladen dann oben, bis das nächste
-  Ereignis ihn übernimmt. Umgekehrt stellt jede Freigabe einen eingeschalteten
-  Nachtmodus her, auch wenn der Rollladen zwischendurch von Hand geöffnet wurde (wie
-  beim Pause-Ende). Außerdem setzt jede Freigabe den Beschattungs-Status zurück: Ein
-  manueller Eingriff während der Beschattung ist danach vergessen.
+  Ereignis ihn übernimmt. Umgekehrt stellt jede Freigabe nach einer echten Sperre
+  einen eingeschalteten Nachtmodus her, auch wenn der Rollladen zwischendurch von Hand
+  geöffnet wurde (wie beim Pause-Ende). Außerdem setzt sie den Beschattungs-Status
+  zurück: Ein manueller Eingriff während der Beschattung ist danach vergessen.
+- **Sensor-Ausfall während einer echten Sperre:** Fällt ein Sperr-Sensor aus, während
+  er "an" meldet, und meldet er danach direkt "aus" (z. B. die Tür wurde in der
+  Zwischenzeit geschlossen), zählt das Ende als bloßer Ausfall. Ein schon in der
+  "an"-Phase gesperrter Nachtmodus wird dann nicht nachgeholt. Dasselbe gilt bei
+  mehreren Sperr-Sensoren, wenn der zuletzt freigegebene nur ausgefallen war — der
+  Rollladen bleibt dann bis zum nächsten regulären Ereignis oben.
 - **Dauerhaft toter Sperr-Sensor** verhindert dauerhaft jedes automatische
   Herunterfahren (siehe oben).
 - **Neustart während der Wartezeit:** Ein Neustart von Home Assistant oder ein

@@ -914,6 +914,8 @@ blueprint:
             ⚠️ Auch ein nicht verfügbarer oder unbekannter Sensor (z.B. leere
             Batterie) sperrt — "unbekannt" ist kein Beweis für "zu". Ein dauerhaft
             toter Sensor verhindert also dauerhaft jedes automatische Herunterfahren.
+            Endet ein bloßer Ausfall, werden nur das Panzer-Schließen bei Sturm und
+            ein erst während des Ausfalls eingeschalteter Nachtmodus nachgeholt.
             Leer lassen = keine Sperre (bisheriges Verhalten).
           default: []
           selector:
@@ -1567,34 +1569,25 @@ actions:
           # sind und auch der zuletzt ausgeschaltete die Wartezeit hinter sich hat
           # (sonst erledigt das später dessen eigener Trigger)
           - "{{ not block_active }}"
-          # Nur nach einer ECHTEN Sperre nachholen: Wechselt ein Sensor nach einem
-          # Neustart oder Funk-Aussetzer von unavailable/unknown auf aus, war meist
-          # nichts gesperrt — sonst würde ein nachts von Hand geöffneter Rollladen
-          # zugefahren, und die Beschattung vergäße manuelle Eingriffe. Ein Ausfall
-          # zählt deshalb nur, wenn der Nachtmodus erst währenddessen eingeschaltet
-          # wurde (dessen Fahrt hat er dann gesperrt). 5 Minuten Abstand, weil ein
-          # Neustart alle Zeitstempel neu setzt und Ausfall und Nachtmodus dann
-          # dicht beieinanderliegen
-          - >-
-            {{ trigger.from_state is not none
-               and (trigger.from_state.state == 'on'
-                    or (night_mode_boolean is string
-                        and is_state(night_mode_boolean, 'on')
-                        and as_timestamp(states[night_mode_boolean].last_changed)
-                            > as_timestamp(trigger.from_state.last_changed) + 300)) }}
         sequence:
-          # Beschattungs-Status freigeben: Während der Sperre wurde nicht
-          # nachgeführt — ohne Freigabe würde der erste Tick die Abweichung als
-          # manuellen Eingriff werten und bis Tagesende nicht mehr beschatten.
-          # In einer Pause übernimmt das das Pause-Ende.
-          - if:
-              - "{{ not pause_active }}"
-              - "{{ shading_status_helper is string and is_state(shading_status_helper, 'on') }}"
-            then:
-              - action: input_boolean.turn_off
-                target:
-                  entity_id: "{{ shading_status_helper }}"
           - variables:
+              # Status-Reset und Nacht nur nach einer ECHTEN Sperre: Wechselt ein
+              # Sensor nach einem Neustart oder Funk-Aussetzer von unavailable/
+              # unknown auf aus, war meist nichts gesperrt — sonst würde ein nachts
+              # von Hand geöffneter Rollladen zugefahren, und die Beschattung
+              # vergäße manuelle Eingriffe. Ein Ausfall zählt deshalb nur, wenn der
+              # Nachtmodus erst währenddessen eingeschaltet wurde (dessen Fahrt hat
+              # er dann gesperrt). 5 Minuten Abstand, weil ein Neustart alle
+              # Zeitstempel neu setzt und Ausfall und Nachtmodus dann dicht
+              # beieinanderliegen. Das Panzer-Schließen bei Sturm gilt dagegen bei
+              # JEDER Freigabe — ein gesperrter Sturm bliebe sonst offen
+              block_was_real: >-
+                {{ trigger.from_state is not none
+                   and (trigger.from_state.state == 'on'
+                        or (night_mode_boolean is string
+                            and is_state(night_mode_boolean, 'on')
+                            and as_timestamp(states[night_mode_boolean].last_changed)
+                                > as_timestamp(trigger.from_state.last_changed) + 300)) }}
               wind_now: >-
                 {% if storm_wind_sensor is string %}
                   {{ states(storm_wind_sensor) | float(0) }}
@@ -1603,6 +1596,18 @@ actions:
                 {% else %}
                   0
                 {% endif %}
+          # Beschattungs-Status freigeben: Während der Sperre wurde nicht
+          # nachgeführt — ohne Freigabe würde der erste Tick die Abweichung als
+          # manuellen Eingriff werten und bis Tagesende nicht mehr beschatten.
+          # In einer Pause übernimmt das das Pause-Ende.
+          - if:
+              - "{{ block_was_real }}"
+              - "{{ not pause_active }}"
+              - "{{ shading_status_helper is string and is_state(shading_status_helper, 'on') }}"
+            then:
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: "{{ shading_status_helper }}"
           - choose:
               # Sturm hat Vorrang vor dem Nachtmodus. Im Panzer-Modus das gesperrte
               # Schließen nachholen (gleiche Fenster-Regel wie beim Sturmschutz,
@@ -1624,6 +1629,7 @@ actions:
               # Verpassten Nachtmodus nachholen (fensterabhängig wie beim Pause-Ende);
               # in einer Pause holt ihn stattdessen das Pause-Ende nach
               - conditions:
+                  - "{{ block_was_real }}"
                   - "{{ not pause_active }}"
                   - "{{ night_mode_boolean is string and is_state(night_mode_boolean, 'on') }}"
                 sequence:
