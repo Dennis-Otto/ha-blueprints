@@ -1946,17 +1946,20 @@ actions:
           # unavailable/unknown nur sichern, wenn noch KEIN Snapshot existiert:
           # nach einem HA-Neustart fehlt er (Szene weg), aber bei einem Sensor-Blip
           # am offenen Fenster würde er sonst mit der Offen-Position überschrieben.
-          # Ein Zwischenzustand, der kürzer als die Reaktionszeit anlag, zählt wie
-          # "geschlossen": Fenstergriff-Sensoren melden beim Drehen von zu nach
-          # gekippt kurz "offen" — dieser Zustand hat keinen eigenen Lauf ausgelöst,
-          # das Fenster war davor also zu
+          # Sonderfall Fenstergriff-Sensoren: Beim Drehen von zu nach gekippt melden
+          # sie kurz "offen". Ein "offen", das kürzer als die Reaktionszeit anlag und
+          # in "gekippt" übergeht, zählt deshalb wie "geschlossen". Bewusst nur diese
+          # Richtung: Ein kurzes Zwischen-"gekippt" (offen -> gekippt -> offen) zählt
+          # nicht. Restfall gekippt -> kurz offen -> gekippt: Dann wird die
+          # Kipp-Position gemerkt (siehe Bekannte Grenzen in der Doku)
           - if:
               - >-
                 {{ trigger.from_state is not none
                    and ((trigger.from_state.state | lower) in ['off', 'closed']
                         or (trigger.from_state.state in ['unavailable', 'unknown']
                             and expand(reclose_scene) | count == 0)
-                        or ((trigger.from_state.state | lower) in ['on', 'open', 'tilted']
+                        or ((trigger.from_state.state | lower) in ['on', 'open']
+                            and (trigger.to_state.state | lower) == 'tilted'
                             and as_timestamp(trigger.to_state.last_changed)
                                 - as_timestamp(trigger.from_state.last_changed)
                                 < window_reaction_delay | float(2))) }}

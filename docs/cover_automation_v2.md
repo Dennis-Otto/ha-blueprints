@@ -224,6 +224,11 @@ die Einmal-Logik des Sonnenheizens und die Eingriffs-Erkennung auf.
   Öffnen und merkt sich die gerade aktuelle (schon geöffnete) Position als
   Ausgangsposition. Nach dem endgültigen Schließen bleibt der Rollladen dann
   oben, statt zurückzufahren. Je größer die Reaktionszeit, desto eher passiert das.
+- **Kurz offen zwischen zweimal Kippen:** Wird ein gekipptes Fenster kürzer als die
+  Reaktionszeit ganz geöffnet und wieder gekippt, hält die Automation das für den
+  Griff-Dreh von "zu" nach "gekippt" und merkt sich die gerade aktuelle
+  Kipp-Position als Ausgangsposition. Nach dem Schließen fährt der Rollladen dann auf
+  die Kipp-Position statt auf die ursprüngliche.
 - **Bewegungs-Öffnen** reagiert auf jede Bewegung, solange seine Bedingungen stimmen:
   Wird der Rollladen tagsüber von Hand wieder komplett geschlossen und dann der Raum
   betreten, öffnet er erneut. Wer das nicht will, nutzt den Pausier-Helfer.
@@ -349,9 +354,9 @@ Sensoren (z. B. mit Drehwinkel-Erkennung) melden beim Drehen des Griffs von "zu"
 Offen-Stellung durchläuft. Ist die Reaktionszeit kürzer, reagiert die Automation auf
 dieses kurze "offen" und fährt den Rollladen ganz hoch, bevor "gekippt" ankommt.
 Abhilfe: Reaktionszeit auf 5 Sekunden stellen. Die Ausgangsposition fürs spätere
-Zurückfahren wird trotzdem korrekt gemerkt — ein Zwischenzustand, der kürzer als die
-Reaktionszeit anlag, zählt dafür wie "geschlossen". Wie lange dein Sensor "offen"
-meldet, zeigt der Verlauf des Fenstersensors.
+Zurückfahren wird trotzdem korrekt gemerkt — ein kurzes "offen" (kürzer als die
+Reaktionszeit), auf das "gekippt" folgt, zählt dafür wie "geschlossen". Wie lange dein
+Sensor "offen" meldet, zeigt der Verlauf des Fenstersensors.
 
 **Kann ich die Automation zeitweise anhalten?** Ja — im Abschnitt "Pausieren" einen
 oder mehrere `input_boolean`-Helfer auswählen. Die Logik ist wählbar: "AN
